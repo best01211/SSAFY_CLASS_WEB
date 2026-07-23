@@ -279,9 +279,13 @@ async function loadMealData(tryAutoFetch=false){
   }else{
     groupsBox.innerHTML=groups?.length
       ? groups.map(group=>`
-          <div class="box">
+          <div class="box meal-group-card">
             <b>${group.group_no}조</b>
-            <p>${escapeHtml(group.members.join(" · "))}</p>
+            <div class="group-members">
+              ${(group.members || []).map(member=>`
+                <div class="group-member">${escapeHtml(member)}</div>
+              `).join("")}
+            </div>
           </div>
         `).join("")
       : '<p class="muted">아직 조가 공개되지 않았습니다.</p>';
