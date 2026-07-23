@@ -1,11 +1,21 @@
 
 import { createClient } from "@supabase/supabase-js";
-import * as cheerio from "cheerio";
 
+const WELPLAN_BASE = "https://welplan.pmh.codes";
 const RESTAURANT_ID = "REST000133";
-const SOURCE_BASE = "https://welplan.pmh.codes";
 
-function getKoreanDateString(date = new Date()) {
+/*
+  Welplan은 URL의 restaurant 쿼리만으로 식당을 확정하지 않고
+  welplan_restaurants 쿠키의 식당 목록을 읽습니다.
+  REST 계열 식당은 신세계푸드 공급자로 조회합니다.
+*/
+const RESTAURANT = {
+  id: RESTAURANT_ID,
+  name: "20층 식당",
+  vendor: "shinsegae",
+};
+
+function koreanCompactDate(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
     year: "numeric",
@@ -13,205 +23,248 @@ function getKoreanDateString(date = new Date()) {
     day: "2-digit",
   }).formatToParts(date);
 
-  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${value.year}${value.month}${value.day}`;
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value])
+  );
+
+  return `${values.year}${values.month}${values.day}`;
 }
 
-function toDatabaseDate(compactDate) {
+function databaseDate(compactDate) {
   return `${compactDate.slice(0, 4)}-${compactDate.slice(4, 6)}-${compactDate.slice(6, 8)}`;
 }
 
-function cleanText(value) {
-  return String(value ?? "")
-    .replace(/\s+/g, " ")
-    .replace(/^\s+|\s+$/g, "");
+function restaurantCookie() {
+  return encodeURIComponent(JSON.stringify([RESTAURANT]));
 }
 
-function looksLikeLunch(value) {
-  const text = cleanText(value).toLowerCase();
-  return text.includes("점심") || text.includes("lunch") || text === "2";
+function clean(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
-function getStringFields(object) {
-  return Object.entries(object ?? {})
-    .filter(([, value]) => typeof value === "string")
-    .map(([key, value]) => ({ key: key.toLowerCase(), value: cleanText(value) }));
+function unique(values) {
+  return [...new Set(values.map(clean).filter(Boolean))];
 }
 
-function extractMenuFromObjectTree(root) {
-  const results = [];
+function findMenusArrays(root) {
+  const found = [];
   const visited = new Set();
 
-  function walk(value, inheritedRestaurant = false, inheritedLunch = false) {
+  function walk(value) {
     if (!value || typeof value !== "object" || visited.has(value)) return;
     visited.add(value);
 
     if (Array.isArray(value)) {
-      value.forEach((item) => walk(item, inheritedRestaurant, inheritedLunch));
+      value.forEach(walk);
       return;
     }
 
-    const fields = getStringFields(value);
-    const serialized = fields.map(({ value }) => value).join(" ");
-    const hasRestaurant =
-      inheritedRestaurant ||
-      serialized.includes(RESTAURANT_ID) ||
-      fields.some(({ key, value }) =>
-        (key.includes("restaurant") || key.includes("store") || key.includes("place")) &&
-        value.includes(RESTAURANT_ID)
-      );
-
-    const hasLunch =
-      inheritedLunch ||
-      fields.some(({ key, value }) =>
-        key.includes("meal") || key.includes("time") || key.includes("course")
-          ? looksLikeLunch(value)
-          : false
-      ) ||
-      serialized.includes("점심");
-
-    if (hasRestaurant && hasLunch) {
-      const menuCandidates = fields
-        .filter(({ key, value }) => {
-          if (value.length < 2 || value.length > 250) return false;
-          if (value === RESTAURANT_ID) return false;
-          return (
-            key.includes("menu") ||
-            key.includes("dish") ||
-            key.includes("food") ||
-            key.includes("name") ||
-            key.includes("title") ||
-            key.includes("corner")
-          );
-        })
-        .map(({ value }) => value)
-        .filter((value) => !value.includes("REST"));
-
-      if (menuCandidates.length) {
-        results.push(menuCandidates.join(" · "));
-      }
+    if (Array.isArray(value.menus)) {
+      found.push(value.menus);
     }
 
-    Object.values(value).forEach((child) => walk(child, hasRestaurant, hasLunch));
+    Object.values(value).forEach(walk);
   }
 
   walk(root);
-
-  return [...new Set(results)]
-    .map(cleanText)
-    .filter(Boolean)
-    .filter((value) => value.length >= 2);
+  return found;
 }
 
-function parseJsonScripts($) {
-  const roots = [];
-
-  $("script").each((_, element) => {
-    const type = ($(element).attr("type") || "").toLowerCase();
-    const id = ($(element).attr("id") || "").toLowerCase();
-    const text = $(element).html()?.trim();
-
-    if (!text) return;
-    if (!type.includes("json") && id !== "__next_data__" && !text.startsWith("{") && !text.startsWith("[")) return;
-
-    try {
-      roots.push(JSON.parse(text));
-    } catch {
-      // JSON이 아닌 스크립트는 무시
+function firstString(object, keys) {
+  for (const key of keys) {
+    const value = object?.[key];
+    if (typeof value === "string" && clean(value)) {
+      return clean(value);
     }
-  });
-
-  return roots;
+  }
+  return "";
 }
 
-function extractFromVisibleHtml($) {
-  const candidates = [];
+function componentNames(menu) {
+  const possibleArrays = [
+    menu?.components,
+    menu?.menuComponents,
+    menu?.foods,
+    menu?.items,
+    menu?.sideMenus,
+    menu?.subMenus,
+  ].filter(Array.isArray);
 
-  $("tr, article, li, section, div").each((_, element) => {
-    const text = cleanText($(element).text());
-    if (!text || text.length < 4 || text.length > 500) return;
+  const values = [];
 
-    const html = $(element).html() || "";
-    const containsRestaurant =
-      text.includes(RESTAURANT_ID) ||
-      html.includes(RESTAURANT_ID) ||
-      $(element).find(`[href*="${RESTAURANT_ID}"], [data-restaurant*="${RESTAURANT_ID}"]`).length > 0;
+  for (const items of possibleArrays) {
+    for (const item of items) {
+      if (typeof item === "string") {
+        values.push(item);
+        continue;
+      }
 
-    if (!containsRestaurant) return;
-    if (!text.includes("점심") && !html.toLowerCase().includes("lunch")) return;
-
-    candidates.push(text);
-  });
-
-  return [...new Set(candidates)];
-}
-
-function extractFallbackLunchText($) {
-  const bodyText = cleanText($("body").text());
-  const lunchIndex = bodyText.indexOf("점심");
-  if (lunchIndex === -1) return [];
-
-  const excerpt = bodyText.slice(lunchIndex, lunchIndex + 1800);
-  return [excerpt];
-}
-
-function parseWelplanHtml(html) {
-  const $ = cheerio.load(html);
-
-  const jsonMenus = parseJsonScripts($).flatMap(extractMenuFromObjectTree);
-  if (jsonMenus.length) {
-    return {
-      menus: jsonMenus.slice(0, 20),
-      strategy: "embedded-json",
-    };
+      values.push(
+        firstString(item, [
+          "name",
+          "menuName",
+          "foodName",
+          "title",
+          "displayName",
+        ])
+      );
+    }
   }
 
-  const htmlMenus = extractFromVisibleHtml($);
-  if (htmlMenus.length) {
-    return {
-      menus: htmlMenus.slice(0, 20),
-      strategy: "restaurant-html",
-    };
-  }
+  return unique(values);
+}
 
-  const fallback = extractFallbackLunchText($);
+function menuTitle(menu) {
+  return firstString(menu, [
+    "name",
+    "menuName",
+    "title",
+    "mainMenuName",
+    "displayName",
+  ]);
+}
+
+function mealTimeText(menu) {
+  return clean(
+    menu?.mealTimeName ??
+    menu?.mealTime?.name ??
+    menu?.mealType ??
+    menu?.timeName ??
+    ""
+  );
+}
+
+function isLunchMenu(menu) {
+  const text = mealTimeText(menu).toLowerCase();
+
+  if (text.includes("점심") || text.includes("lunch")) return true;
+
+  const mealTimeId = String(
+    menu?.mealTimeId ??
+    menu?.mealTime?.id ??
+    menu?.timeId ??
+    ""
+  );
+
+  // 신세계 전체 메뉴 응답에서 점심 식별값이 보통 2로 매핑됨
+  return mealTimeId === "2";
+}
+
+function normalizeMenu(menu) {
+  const title = menuTitle(menu);
+  if (!title) return null;
+
+  const sides = componentNames(menu).filter((name) => name !== title);
+
   return {
-    menus: fallback,
-    strategy: "lunch-text-fallback",
+    title,
+    sides,
   };
 }
 
-async function fetchAndSaveMenu(compactDate) {
+function extractMenus(payload) {
+  const menuArrays = findMenusArrays(payload);
+  const allMenus = menuArrays.flat();
+
+  const normalizedAll = allMenus
+    .map(normalizeMenu)
+    .filter(Boolean);
+
+  const lunchOnly = allMenus
+    .filter(isLunchMenu)
+    .map(normalizeMenu)
+    .filter(Boolean);
+
+  // API가 이미 time=2로 필터링되었거나 mealTime 필드가 없을 수 있음
+  return uniqueMenuObjects(lunchOnly.length ? lunchOnly : normalizedAll);
+}
+
+function uniqueMenuObjects(menus) {
+  const map = new Map();
+
+  for (const menu of menus) {
+    const key = `${menu.title}|${menu.sides.join("|")}`;
+    if (!map.has(key)) map.set(key, menu);
+  }
+
+  return [...map.values()];
+}
+
+function formatMenus(menus) {
+  return menus
+    .map((menu) => {
+      if (!menu.sides.length) return menu.title;
+      return `${menu.title}\n${menu.sides.join(" · ")}`;
+    })
+    .join("\n\n");
+}
+
+async function requestWelplanApi(compactDate) {
+  const cookie = `welplan_restaurants=${restaurantCookie()}`;
+
+  /*
+    time=2는 점심입니다.
+    해당 식당이 전체 메뉴만 지원하는 경우를 대비해 time=all도 재시도합니다.
+  */
+  const urls = [
+    `${WELPLAN_BASE}/api/menu/live?kind=takein&date=${compactDate}&time=2`,
+    `${WELPLAN_BASE}/api/menu/live?kind=takein&date=${compactDate}&time=all`,
+  ];
+
+  let lastError = null;
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: "application/json",
+          Cookie: cookie,
+          "User-Agent": "SSAFY-Class-Menu/2.0",
+        },
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Welplan API HTTP ${response.status}`);
+      }
+
+      const payload = await response.json();
+      const menus = extractMenus(payload);
+
+      if (menus.length) {
+        return {
+          menus,
+          apiUrl: url,
+          rawRestaurant: payload?.restaurants ?? [],
+        };
+      }
+
+      lastError = new Error("Welplan API 응답에서 메뉴를 찾지 못했습니다.");
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError ?? new Error("Welplan 메뉴 요청에 실패했습니다.");
+}
+
+async function saveMenu(compactDate) {
   const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secretKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Netlify 환경 변수 SUPABASE_URL 또는 SUPABASE_SERVICE_ROLE_KEY가 없습니다.");
+  if (!supabaseUrl || !secretKey) {
+    throw new Error(
+      "Netlify 환경 변수 SUPABASE_URL 또는 SUPABASE_SERVICE_ROLE_KEY가 없습니다."
+    );
   }
 
-  const sourceUrl = `${SOURCE_BASE}/takein/${compactDate}/all?restaurant=${RESTAURANT_ID}`;
-  const response = await fetch(sourceUrl, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 SSAFY-Class-MenuBot/1.0",
-      "Accept": "text/html,application/xhtml+xml",
-      "Accept-Language": "ko-KR,ko;q=0.9",
-    },
-  });
+  const result = await requestWelplanApi(compactDate);
+  const menuText = formatMenus(result.menus);
+  const date = databaseDate(compactDate);
+  const pageUrl =
+    `${WELPLAN_BASE}/takein/${compactDate}/all?restaurant=${RESTAURANT_ID}`;
 
-  if (!response.ok) {
-    throw new Error(`Welplan 요청 실패: HTTP ${response.status}`);
-  }
-
-  const html = await response.text();
-  const parsed = parseWelplanHtml(html);
-  const databaseDate = toDatabaseDate(compactDate);
-  const menuText = parsed.menus.join("\n");
-
-  if (!menuText || menuText.length < 3) {
-    throw new Error("20층 점심 메뉴를 추출하지 못했습니다. Welplan 화면 구조를 확인해야 합니다.");
-  }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+  const supabase = createClient(supabaseUrl, secretKey, {
     auth: { persistSession: false },
   });
 
@@ -219,10 +272,10 @@ async function fetchAndSaveMenu(compactDate) {
     .from("daily_menus")
     .upsert(
       {
-        menu_date: databaseDate,
+        menu_date: date,
         menu_20: menuText,
-        menu_20_source: `welplan:${parsed.strategy}`,
-        menu_20_source_url: sourceUrl,
+        menu_20_source: "welplan-live-api",
+        menu_20_source_url: pageUrl,
         menu_20_fetched_at: new Date().toISOString(),
         menu_20_fetch_error: null,
         updated_at: new Date().toISOString(),
@@ -233,11 +286,16 @@ async function fetchAndSaveMenu(compactDate) {
   if (error) throw error;
 
   return {
-    date: databaseDate,
-    sourceUrl,
-    strategy: parsed.strategy,
-    menus: parsed.menus,
+    date,
+    menuText,
+    menus: result.menus,
+    sourceUrl: pageUrl,
+    apiUrl: result.apiUrl,
   };
 }
 
-export { fetchAndSaveMenu, getKoreanDateString };
+export {
+  koreanCompactDate,
+  requestWelplanApi,
+  saveMenu,
+};
