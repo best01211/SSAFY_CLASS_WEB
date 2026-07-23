@@ -1,21 +1,411 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>관리자</title><link rel="stylesheet" href="styles.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script></head><body>
-<header><div class="wrap top"><div><h1>관리자</h1><p>자리 적용 날짜와 당일 메뉴를 관리합니다.</p></div><a class="primary" href="index.html">학생 화면</a></div></header><main>
-<section id="login" class="card login"><h2>로그인</h2><label>이메일</label><input id="email" type="email"><label>비밀번호</label><input id="pw" type="password"><div class="actions" style="margin-top:12px"><button id="loginBtn" class="primary">로그인</button></div><div id="loginStatus" class="status">관리자 로그인이 필요합니다.</div></section>
-<section id="app" style="display:none"><div class="tabs"><button class="primary" onclick="showAdmin('seatAdmin')">자리 예약</button><button onclick="showAdmin('menuAdmin')">메뉴 등록</button></div>
-<div id="seatAdmin" class="panel active"><div class="grid"><div class="card"><h2>자리 배치 예약</h2><label>적용 날짜</label><input id="effectiveDate" type="date"><div class="actions" style="margin-top:12px"><button id="generate" class="primary">자리 생성</button><button id="schedule" class="success" disabled>해당 날짜로 예약</button></div><div id="seatStatus" class="status">날짜를 정하고 생성하세요.</div><div class="classroom"><div class="side left" id="leftSeats"></div><div class="corridor">복도</div><div class="side right" id="rightSeats"></div></div></div><div class="card"><h2>예약 목록</h2><div id="scheduleList"></div></div></div></div>
-<div id="menuAdmin" class="panel"><div class="grid"><div class="card"><h2>메뉴 등록</h2><label>날짜</label><input id="menuDate" type="date"><label>10층 메뉴</label><textarea id="menu10"></textarea><label>20층 메뉴</label><textarea id="menu20"></textarea><div class="actions"><button id="saveMenu" class="primary">메뉴 저장</button></div><div id="menuStatus" class="status">메뉴를 입력하세요.</div></div><div class="card"><h2>선택 현황</h2><div id="choiceList" class="muted">조회 전</div><div class="actions"><button id="refresh">새로고침</button><button id="manual" class="success">20층 조 수동 생성</button></div><p class="muted">평일 오전 11시에 자동 생성됩니다.</p></div></div></div></section></main>
-<script src="common.js"></script><script>
-const sb=supabase.createClient(APP_CONFIG.SUPABASE_URL,APP_CONFIG.SUPABASE_ANON_KEY);let rounds=[],candidate=null;
-function showAdmin(id){document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active')}
-function key(a,b){return[a,b].sort().join('|')}function sh(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
-function evaluate(a){const seen=new Set();rounds.forEach(r=>ROWS.forEach(row=>{const n=row.map(s=>r.assignment?.[s]).filter(Boolean);for(let i=0;i<n.length;i++)for(let j=i+1;j<n.length;j++)seen.add(key(n[i],n[j]))}));let score=0,rep=0;ROWS.forEach(row=>{const n=row.map(s=>a[s]).filter(Boolean);for(let i=0;i<n.length;i++)for(let j=i+1;j<n.length;j++)if(seen.has(key(n[i],n[j]))){score+=100000;rep++}});return{score,rep}}
-generate.onclick=()=>{let best,ev={score:Infinity,rep:0};for(let t=0;t<40000;t++){const names=sh([...STUDENTS,null]),seats=sh(SEATS),a={};seats.forEach((s,i)=>{if(names[i])a[s]=names[i]});const e=evaluate(a);if(e.score<ev.score){best=a;ev=e;if(e.score===0)break}}candidate=best;renderSeats(best);schedule.disabled=false;seatStatus.className=ev.rep?'status warn':'status ok';seatStatus.textContent=ev.rep?`과거 같은 줄 중복 ${ev.rep}건 포함`:'과거 같은 줄 조합 없이 생성'};
-async function load(){const {data}=await sb.from('seating_schedules').select('*').order('effective_date');rounds=data||[];scheduleList.innerHTML=rounds.map(x=>`<div class="status"><b>${x.effective_date}</b></div>`).join('')||'예약 없음'}
-schedule.onclick=async()=>{if(!effectiveDate.value||!candidate)return alert('날짜와 자리표를 확인하세요.');const {error}=await sb.from('seating_schedules').upsert({effective_date:effectiveDate.value,assignment:candidate},{onConflict:'effective_date'});if(error)return alert(error.message);schedule.disabled=true;await load();seatStatus.className='status ok';seatStatus.textContent='예약했습니다.'}
-saveMenu.onclick=async()=>{const {error}=await sb.from('daily_menus').upsert({menu_date:menuDate.value,menu_10:menu10.value,menu_20:menu20.value},{onConflict:'menu_date'});menuStatus.className=error?'status warn':'status ok';menuStatus.textContent=error?error.message:'저장했습니다.'}
-async function choices(){const {data,error}=await sb.from('meal_choices').select('*').eq('choice_date',menuDate.value||today()).order('floor').order('student_name');choiceList.innerHTML=error?error.message:(data||[]).map(x=>`${x.student_name} · ${x.floor}층`).join('<br>')||'선택 없음'}
-refresh.onclick=choices;manual.onclick=async()=>{const {error}=await sb.rpc('generate_today_meal_groups');alert(error?error.message:'생성했습니다.')};
-loginBtn.onclick=async()=>{const {error}=await sb.auth.signInWithPassword({email:email.value,password:pw.value});if(error){loginStatus.className='status warn';loginStatus.textContent=error.message}else init()};
-async function init(){const {data:{session}}=await sb.auth.getSession();login.style.display=session?'none':'block';app.style.display=session?'block':'none';if(session){effectiveDate.value=today();menuDate.value=today();renderSeats({});await load();await choices()}}
-init();
-</script></body></html>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>관리자 | 우리반 자리·점심</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="config.js"></script>
+</head>
+<body>
+<header>
+  <div class="wrap top">
+    <div>
+      <h1>관리자</h1>
+      <p>자리 배치 예약과 메뉴·점심 조를 관리합니다.</p>
+    </div>
+    <a class="primary" href="index.html">학생 화면</a>
+  </div>
+</header>
+
+<main>
+  <section id="loginSection" class="card login">
+    <h2>로그인</h2>
+
+    <label for="adminId">아이디</label>
+    <input id="adminId" type="text" autocomplete="username" value="admin">
+
+    <label for="adminPassword">비밀번호</label>
+    <input id="adminPassword" type="password" autocomplete="current-password">
+
+    <div class="actions" style="margin-top:12px">
+      <button id="loginButton" class="primary" type="button">로그인</button>
+    </div>
+
+    <div id="loginStatus" class="status">관리자 로그인이 필요합니다.</div>
+  </section>
+
+  <section id="adminApp" style="display:none">
+    <div class="top" style="margin-bottom:14px">
+      <strong>관리자 로그인됨</strong>
+      <button id="logoutButton" type="button">로그아웃</button>
+    </div>
+
+    <div class="tabs">
+      <button class="primary" id="seatAdminTab" type="button">자리 배치</button>
+      <button id="menuAdminTab" type="button">점심 관리</button>
+    </div>
+
+    <section id="seatAdminPanel" class="panel active">
+      <div class="grid">
+        <div class="card">
+          <h2>자리 배치 예약</h2>
+          <p class="muted">
+            자리표를 생성한 뒤 적용 날짜로 저장하면 해당 날짜부터 학생 화면에 표시됩니다.
+          </p>
+
+          <label for="effectiveDate">적용 날짜</label>
+          <input id="effectiveDate" type="date">
+
+          <div class="actions" style="margin-top:12px">
+            <button id="generateSeatButton" class="primary" type="button">자리 생성</button>
+            <button id="saveSeatButton" class="success" type="button" disabled>
+              이 자리표 예약
+            </button>
+          </div>
+
+          <div id="seatStatus" class="status">자리 생성을 눌러주세요.</div>
+
+          <div class="classroom">
+            <div class="side left" id="leftSeats"></div>
+            <div class="corridor">복도</div>
+            <div class="side right" id="rightSeats"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>자리표 확인 방법</h2>
+          <ol class="muted">
+            <li>적용 날짜를 오늘로 설정합니다.</li>
+            <li>자리 생성을 누릅니다.</li>
+            <li>이 자리표 예약을 누릅니다.</li>
+            <li>학생 화면의 자리표 탭을 새로고침합니다.</li>
+          </ol>
+
+          <h2 style="margin-top:24px">예약 목록</h2>
+          <div id="scheduleList" class="muted">불러오는 중입니다.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="menuAdminPanel" class="panel">
+      <div class="grid">
+        <div class="card">
+          <h2>Welplan 20층 메뉴</h2>
+          <p class="muted">
+            버튼을 누르면 REST000133 식당의 선택 날짜 점심 메뉴를 가져와 Supabase에 저장합니다.
+          </p>
+
+          <label for="menuDate">날짜</label>
+          <input id="menuDate" type="date">
+
+          <div class="actions" style="margin-top:12px">
+            <button id="fetchMenuButton" class="primary" type="button">
+              Welplan 메뉴 지금 가져오기
+            </button>
+          </div>
+
+          <div id="fetchMenuStatus" class="status">메뉴 수집 전입니다.</div>
+
+          <hr>
+
+          <h2>수동 메뉴 등록</h2>
+
+          <label for="menu10">10층 메뉴</label>
+          <textarea id="menu10"></textarea>
+
+          <label for="menu20">20층 메뉴</label>
+          <textarea id="menu20"></textarea>
+
+          <div class="actions">
+            <button id="saveMenuButton" type="button">수동 메뉴 저장</button>
+          </div>
+
+          <div id="menuStatus" class="status">필요할 때만 수동으로 입력하세요.</div>
+        </div>
+
+        <div class="card">
+          <h2>선택 현황</h2>
+          <div class="actions">
+            <button id="loadChoicesButton" type="button">선택 현황 조회</button>
+            <button id="generateGroupsButton" class="success" type="button">
+              20층 조 지금 생성
+            </button>
+          </div>
+
+          <div id="choicesList" class="muted">조회 전입니다.</div>
+          <div id="groupStatus" class="status" style="margin-top:12px">
+            자동 생성은 오전 11시에 실행됩니다.
+          </div>
+        </div>
+      </div>
+    </section>
+  </section>
+</main>
+
+<script src="common.js"></script>
+<script>
+let candidateAssignment=null;
+let savedSchedules=[];
+
+const credentials=()=>({
+  adminId:sessionStorage.getItem("adminId") || document.getElementById("adminId")?.value.trim(),
+  adminPassword:sessionStorage.getItem("adminPassword") || document.getElementById("adminPassword")?.value
+});
+
+async function adminRequest(action,payload={}){
+  const response=await fetch("/api/admin",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({...credentials(),action,...payload})
+  });
+
+  let data={};
+  try{data=await response.json()}catch{}
+
+  if(!response.ok || !data.ok){
+    throw new Error(data.message || `관리자 API 오류: HTTP ${response.status}`);
+  }
+
+  return data;
+}
+
+function pairKey(a,b){return [a,b].sort().join("||")}
+
+function shuffle(array){
+  const result=[...array];
+  for(let i=result.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [result[i],result[j]]=[result[j],result[i]];
+  }
+  return result;
+}
+
+function evaluateAssignment(assignment){
+  const previousPairs=new Set();
+
+  savedSchedules.forEach(schedule=>{
+    ROWS.forEach(row=>{
+      const names=row.map(seat=>schedule.assignment?.[seat]).filter(Boolean);
+      for(let i=0;i<names.length;i++){
+        for(let j=i+1;j<names.length;j++){
+          previousPairs.add(pairKey(names[i],names[j]));
+        }
+      }
+    });
+  });
+
+  let repeats=0;
+  ROWS.forEach(row=>{
+    const names=row.map(seat=>assignment[seat]).filter(Boolean);
+    for(let i=0;i<names.length;i++){
+      for(let j=i+1;j<names.length;j++){
+        if(previousPairs.has(pairKey(names[i],names[j]))) repeats++;
+      }
+    }
+  });
+
+  return repeats;
+}
+
+function generateAssignment(){
+  let best=null;
+  let bestRepeats=Infinity;
+
+  for(let attempt=0;attempt<50000;attempt++){
+    const people=shuffle([...STUDENTS,null]);
+    const seats=shuffle(SEATS);
+    const assignment={};
+
+    seats.forEach((seat,index)=>{
+      if(people[index]) assignment[seat]=people[index];
+    });
+
+    const repeats=evaluateAssignment(assignment);
+
+    if(repeats<bestRepeats){
+      best=assignment;
+      bestRepeats=repeats;
+      if(repeats===0) break;
+    }
+  }
+
+  candidateAssignment=best;
+  renderSeats(best);
+  document.getElementById("saveSeatButton").disabled=false;
+
+  const status=document.getElementById("seatStatus");
+  status.className=bestRepeats ? "status warn" : "status ok";
+  status.textContent=bestRepeats
+    ? `과거 같은 줄 조합 ${bestRepeats}건이 포함된 최소 중복 배치입니다.`
+    : "과거 같은 줄 조합 없이 생성했습니다.";
+}
+
+async function loadSchedules(){
+  const data=await adminRequest("list_schedules");
+  savedSchedules=data.schedules;
+
+  document.getElementById("scheduleList").innerHTML=savedSchedules.length
+    ? savedSchedules.map(item=>`
+        <div class="box" style="margin-bottom:8px">
+          <b>${escapeHtml(item.effective_date)}</b>
+        </div>
+      `).join("")
+    : "예약된 자리표가 없습니다.";
+}
+
+async function showAdmin(){
+  document.getElementById("loginSection").style.display="none";
+  document.getElementById("adminApp").style.display="block";
+  document.getElementById("effectiveDate").value=today();
+  document.getElementById("menuDate").value=today();
+  renderSeats({});
+  await loadSchedules();
+}
+
+document.getElementById("loginButton").addEventListener("click",async()=>{
+  const status=document.getElementById("loginStatus");
+
+  try{
+    await adminRequest("login");
+
+    sessionStorage.setItem("adminId",document.getElementById("adminId").value.trim());
+    sessionStorage.setItem("adminPassword",document.getElementById("adminPassword").value);
+
+    status.className="status ok";
+    status.textContent="로그인되었습니다.";
+    await showAdmin();
+  }catch(error){
+    status.className="status warn";
+    status.textContent=error.message;
+  }
+});
+
+document.getElementById("logoutButton").addEventListener("click",()=>{
+  sessionStorage.removeItem("adminId");
+  sessionStorage.removeItem("adminPassword");
+  location.reload();
+});
+
+document.getElementById("generateSeatButton").addEventListener("click",generateAssignment);
+
+document.getElementById("saveSeatButton").addEventListener("click",async()=>{
+  const date=document.getElementById("effectiveDate").value;
+
+  if(!date || !candidateAssignment){
+    alert("적용 날짜와 자리표를 확인하세요.");
+    return;
+  }
+
+  try{
+    await adminRequest("save_schedule",{
+      effectiveDate:date,
+      assignment:candidateAssignment
+    });
+
+    document.getElementById("seatStatus").className="status ok";
+    document.getElementById("seatStatus").textContent=`${date} 적용 자리표를 예약했습니다.`;
+    document.getElementById("saveSeatButton").disabled=true;
+    await loadSchedules();
+  }catch(error){
+    document.getElementById("seatStatus").className="status warn";
+    document.getElementById("seatStatus").textContent=error.message;
+  }
+});
+
+document.getElementById("fetchMenuButton").addEventListener("click",async()=>{
+  const status=document.getElementById("fetchMenuStatus");
+  const date=document.getElementById("menuDate").value;
+
+  status.className="status";
+  status.textContent="Welplan 메뉴를 가져오는 중입니다.";
+
+  try{
+    const response=await fetch(`/api/fetch-welplan-menu?date=${date.replaceAll("-","")}`,{
+      cache:"no-store"
+    });
+
+    const data=await response.json();
+
+    if(!response.ok || !data.ok){
+      throw new Error(data.message || `HTTP ${response.status}`);
+    }
+
+    status.className="status ok";
+    status.innerHTML=`
+      메뉴 저장 성공<br>
+      <span style="white-space:pre-line">${escapeHtml(data.result.menuText)}</span>
+    `;
+  }catch(error){
+    status.className="status warn";
+    status.textContent=`메뉴 수집 실패: ${error.message}`;
+  }
+});
+
+document.getElementById("saveMenuButton").addEventListener("click",async()=>{
+  const status=document.getElementById("menuStatus");
+
+  try{
+    await adminRequest("save_menu",{
+      date:document.getElementById("menuDate").value,
+      menu10:document.getElementById("menu10").value,
+      menu20:document.getElementById("menu20").value
+    });
+
+    status.className="status ok";
+    status.textContent="메뉴를 저장했습니다.";
+  }catch(error){
+    status.className="status warn";
+    status.textContent=error.message;
+  }
+});
+
+document.getElementById("loadChoicesButton").addEventListener("click",async()=>{
+  const box=document.getElementById("choicesList");
+
+  try{
+    const data=await adminRequest("list_choices",{
+      date:document.getElementById("menuDate").value
+    });
+
+    box.innerHTML=data.choices.length
+      ? data.choices.map(item=>`${escapeHtml(item.student_name)} · ${item.floor}층`).join("<br>")
+      : "선택자가 없습니다.";
+  }catch(error){
+    box.textContent=error.message;
+  }
+});
+
+document.getElementById("generateGroupsButton").addEventListener("click",async()=>{
+  const status=document.getElementById("groupStatus");
+
+  try{
+    await adminRequest("generate_groups");
+    status.className="status ok";
+    status.textContent="오늘 20층 식사 조를 생성했습니다.";
+  }catch(error){
+    status.className="status warn";
+    status.textContent=error.message;
+  }
+});
+
+function openAdminPanel(panel){
+  document.getElementById("seatAdminPanel").classList.toggle("active",panel==="seat");
+  document.getElementById("menuAdminPanel").classList.toggle("active",panel==="menu");
+  document.getElementById("seatAdminTab").classList.toggle("primary",panel==="seat");
+  document.getElementById("menuAdminTab").classList.toggle("primary",panel==="menu");
+}
+
+document.getElementById("seatAdminTab").addEventListener("click",()=>openAdminPanel("seat"));
+document.getElementById("menuAdminTab").addEventListener("click",()=>openAdminPanel("menu"));
+
+if(sessionStorage.getItem("adminId") && sessionStorage.getItem("adminPassword")){
+  adminRequest("login")
+    .then(showAdmin)
+    .catch(()=>{
+      sessionStorage.clear();
+    });
+}
+</script>
+</body>
+</html>
