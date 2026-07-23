@@ -12,7 +12,7 @@
   <div class="wrap top">
     <div>
       <h1>관리자</h1>
-      <p>자리 배치 예약과 메뉴·점심 조를 관리합니다.</p>
+      <p>자리 배치, 점심 조, 학생 명단을 관리합니다.</p>
     </div>
     <a class="primary" href="index.html">학생 화면</a>
   </div>
@@ -21,69 +21,48 @@
 <main>
   <section id="loginSection" class="card login">
     <h2>로그인</h2>
-
     <label for="adminId">아이디</label>
-    <input id="adminId" type="text" autocomplete="username" value="admin">
-
+    <input id="adminId" type="text" value="admin" autocomplete="username">
     <label for="adminPassword">비밀번호</label>
     <input id="adminPassword" type="password" autocomplete="current-password">
-
-    <div class="actions" style="margin-top:12px">
-      <button id="loginButton" class="primary" type="button">로그인</button>
-    </div>
-
+    <div class="actions"><button id="loginButton" class="primary">로그인</button></div>
     <div id="loginStatus" class="status">관리자 로그인이 필요합니다.</div>
   </section>
 
   <section id="adminApp" style="display:none">
     <div class="top" style="margin-bottom:14px">
       <strong>관리자 로그인됨</strong>
-      <button id="logoutButton" type="button">로그아웃</button>
+      <button id="logoutButton">로그아웃</button>
     </div>
 
     <div class="tabs">
-      <button class="primary" id="seatAdminTab" type="button">자리 배치</button>
-      <button id="menuAdminTab" type="button">점심 관리</button>
+      <button class="primary" id="seatAdminTab">자리 배치</button>
+      <button id="menuAdminTab">점심 관리</button>
+      <button id="studentAdminTab">학생 관리</button>
     </div>
 
     <section id="seatAdminPanel" class="panel active">
       <div class="grid">
         <div class="card">
           <h2>자리 배치 예약</h2>
-          <p class="muted">
-            자리표를 생성한 뒤 적용 날짜로 저장하면 해당 날짜부터 학생 화면에 표시됩니다.
-          </p>
-
+          <p class="muted">현재 활성 학생을 기준으로 자리표를 만듭니다.</p>
           <label for="effectiveDate">적용 날짜</label>
           <input id="effectiveDate" type="date">
-
-          <div class="actions" style="margin-top:12px">
-            <button id="generateSeatButton" class="primary" type="button">자리 생성</button>
-            <button id="saveSeatButton" class="success" type="button" disabled>
-              이 자리표 예약
-            </button>
+          <div class="actions">
+            <button id="generateSeatButton" class="primary">자리 생성</button>
+            <button id="saveSeatButton" class="success" disabled>이 자리표 예약</button>
           </div>
-
           <div id="seatStatus" class="status">자리 생성을 눌러주세요.</div>
-
           <div class="classroom">
             <div class="side left" id="leftSeats"></div>
             <div class="corridor">복도</div>
             <div class="side right" id="rightSeats"></div>
           </div>
         </div>
-
         <div class="card">
-          <h2>자리표 확인 방법</h2>
-          <ol class="muted">
-            <li>적용 날짜를 오늘로 설정합니다.</li>
-            <li>자리 생성을 누릅니다.</li>
-            <li>이 자리표 예약을 누릅니다.</li>
-            <li>학생 화면의 자리표 탭을 새로고침합니다.</li>
-          </ol>
-
-          <h2 style="margin-top:24px">예약 목록</h2>
-          <div id="scheduleList" class="muted">불러오는 중입니다.</div>
+          <h2>예약 목록</h2>
+          <p class="muted">보기로 자리표를 확인하고, 필요 없는 예약은 삭제할 수 있습니다.</p>
+          <div id="scheduleList">불러오는 중입니다.</div>
         </div>
       </div>
     </section>
@@ -92,61 +71,94 @@
       <div class="grid">
         <div class="card">
           <h2>Welplan 20층 메뉴</h2>
-          <p class="muted">
-            버튼을 누르면 REST000133 식당의 선택 날짜 점심 메뉴를 가져와 Supabase에 저장합니다.
-          </p>
-
           <label for="menuDate">날짜</label>
           <input id="menuDate" type="date">
-
-          <div class="actions" style="margin-top:12px">
-            <button id="fetchMenuButton" class="primary" type="button">
-              Welplan 메뉴 지금 가져오기
-            </button>
+          <div class="actions">
+            <button id="fetchMenuButton" class="primary">Welplan 메뉴 지금 가져오기</button>
           </div>
-
           <div id="fetchMenuStatus" class="status">메뉴 수집 전입니다.</div>
-
           <hr>
-
           <h2>수동 메뉴 등록</h2>
-
           <label for="menu10">10층 메뉴</label>
           <textarea id="menu10"></textarea>
-
           <label for="menu20">20층 메뉴</label>
           <textarea id="menu20"></textarea>
-
-          <div class="actions">
-            <button id="saveMenuButton" type="button">수동 메뉴 저장</button>
-          </div>
-
+          <div class="actions"><button id="saveMenuButton">수동 메뉴 저장</button></div>
           <div id="menuStatus" class="status">필요할 때만 수동으로 입력하세요.</div>
         </div>
 
         <div class="card">
-          <h2>선택 현황</h2>
+          <h2>당일 배정 현황</h2>
+          <p class="muted">
+            선택하지 않은 활성 학생은 자동으로 20층입니다.
+            10층으로 변경한 학생만 20층 식사 조에서 제외됩니다.
+          </p>
           <div class="actions">
-            <button id="loadChoicesButton" type="button">선택 현황 조회</button>
-            <button id="generateGroupsButton" class="success" type="button">
-              20층 조 지금 생성
-            </button>
+            <button id="loadChoicesButton">배정 현황 조회</button>
+            <button id="generateGroupsButton" class="success">20층 조 지금 생성</button>
           </div>
-
-          <div id="choicesList" class="muted">조회 전입니다.</div>
-          <div id="groupStatus" class="status" style="margin-top:12px">
-            자동 생성은 오전 11시에 실행됩니다.
-          </div>
+          <div id="choicesList">조회 전입니다.</div>
+          <div id="groupStatus" class="status">자동 생성은 오전 11시에 실행됩니다.</div>
         </div>
+      </div>
+    </section>
+
+    <section id="studentAdminPanel" class="panel">
+      <div class="grid">
+        <div class="card">
+          <h2>학생 추가</h2>
+          <label for="newStudentName">이름</label>
+          <input id="newStudentName" type="text" maxlength="30">
+          <label for="newStudentNote">메모</label>
+          <input id="newStudentNote" type="text" maxlength="100" placeholder="선택사항">
+          <div class="actions">
+            <button id="addStudentButton" class="primary">학생 추가</button>
+          </div>
+          <div id="studentStatus" class="status">학생 정보를 관리할 수 있습니다.</div>
+        </div>
+
+        <div class="card">
+          <h2>학생 현황</h2>
+          <div class="metric-row">
+            <div class="metric"><b id="activeStudentCount">0</b><span>활성 학생</span></div>
+            <div class="metric"><b id="allStudentCount">0</b><span>전체 기록</span></div>
+            <div class="metric"><b id="seatCapacity">28</b><span>사용 좌석</span></div>
+          </div>
+          <p class="muted">활성 학생이 28명을 넘으면 자리 생성이 불가능합니다.</p>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:18px;overflow:auto">
+        <table class="admin-table">
+          <thead>
+            <tr><th>이름</th><th>메모</th><th>활성</th><th>관리</th></tr>
+          </thead>
+          <tbody id="studentTableBody"></tbody>
+        </table>
       </div>
     </section>
   </section>
 </main>
 
+<div id="scheduleModal" class="modal-backdrop">
+  <div class="modal-card">
+    <div class="top">
+      <h2 id="scheduleModalTitle">예약 자리표</h2>
+      <button id="closeScheduleModal">닫기</button>
+    </div>
+    <div class="classroom">
+      <div class="side left" id="modalLeftSeats"></div>
+      <div class="corridor">복도</div>
+      <div class="side right" id="modalRightSeats"></div>
+    </div>
+  </div>
+</div>
+
 <script src="common.js"></script>
 <script>
 let candidateAssignment=null;
 let savedSchedules=[];
+let managedStudents=[];
 
 const credentials=()=>({
   adminId:sessionStorage.getItem("adminId") || document.getElementById("adminId")?.value.trim(),
@@ -159,19 +171,13 @@ async function adminRequest(action,payload={}){
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({...credentials(),action,...payload})
   });
-
   let data={};
   try{data=await response.json()}catch{}
-
-  if(!response.ok || !data.ok){
-    throw new Error(data.message || `관리자 API 오류: HTTP ${response.status}`);
-  }
-
+  if(!response.ok || !data.ok) throw new Error(data.message || `관리자 API 오류: HTTP ${response.status}`);
   return data;
 }
 
 function pairKey(a,b){return [a,b].sort().join("||")}
-
 function shuffle(array){
   const result=[...array];
   for(let i=result.length-1;i>0;i--){
@@ -183,57 +189,43 @@ function shuffle(array){
 
 function evaluateAssignment(assignment){
   const previousPairs=new Set();
-
   savedSchedules.forEach(schedule=>{
     ROWS.forEach(row=>{
       const names=row.map(seat=>schedule.assignment?.[seat]).filter(Boolean);
-      for(let i=0;i<names.length;i++){
-        for(let j=i+1;j<names.length;j++){
-          previousPairs.add(pairKey(names[i],names[j]));
-        }
-      }
+      for(let i=0;i<names.length;i++) for(let j=i+1;j<names.length;j++) previousPairs.add(pairKey(names[i],names[j]));
     });
   });
-
   let repeats=0;
   ROWS.forEach(row=>{
     const names=row.map(seat=>assignment[seat]).filter(Boolean);
-    for(let i=0;i<names.length;i++){
-      for(let j=i+1;j<names.length;j++){
-        if(previousPairs.has(pairKey(names[i],names[j]))) repeats++;
-      }
-    }
+    for(let i=0;i<names.length;i++) for(let j=i+1;j<names.length;j++) if(previousPairs.has(pairKey(names[i],names[j]))) repeats++;
   });
-
   return repeats;
 }
 
 function generateAssignment(){
-  let best=null;
-  let bestRepeats=Infinity;
-
-  for(let attempt=0;attempt<50000;attempt++){
-    const people=shuffle([...STUDENTS,null]);
-    const seats=shuffle(SEATS);
-    const assignment={};
-
-    seats.forEach((seat,index)=>{
-      if(people[index]) assignment[seat]=people[index];
-    });
-
-    const repeats=evaluateAssignment(assignment);
-
-    if(repeats<bestRepeats){
-      best=assignment;
-      bestRepeats=repeats;
-      if(repeats===0) break;
-    }
+  if(!STUDENTS.length){
+    document.getElementById("seatStatus").className="status warn";
+    document.getElementById("seatStatus").textContent="활성 학생이 없습니다.";
+    return;
+  }
+  if(STUDENTS.length>SEATS.length){
+    document.getElementById("seatStatus").className="status warn";
+    document.getElementById("seatStatus").textContent=`활성 학생 ${STUDENTS.length}명은 사용 좌석 ${SEATS.length}개보다 많습니다.`;
+    return;
   }
 
+  let best=null,bestRepeats=Infinity;
+  for(let attempt=0;attempt<50000;attempt++){
+    const people=shuffle([...STUDENTS,...Array(SEATS.length-STUDENTS.length).fill(null)]);
+    const seats=shuffle(SEATS),assignment={};
+    seats.forEach((seat,index)=>{if(people[index]) assignment[seat]=people[index]});
+    const repeats=evaluateAssignment(assignment);
+    if(repeats<bestRepeats){best=assignment;bestRepeats=repeats;if(repeats===0)break}
+  }
   candidateAssignment=best;
   renderSeats(best);
   document.getElementById("saveSeatButton").disabled=false;
-
   const status=document.getElementById("seatStatus");
   status.className=bestRepeats ? "status warn" : "status ok";
   status.textContent=bestRepeats
@@ -241,18 +233,135 @@ function generateAssignment(){
     : "과거 같은 줄 조합 없이 생성했습니다.";
 }
 
+function renderModalSeats(assignment){
+  const originalLeft=document.getElementById("leftSeats");
+  const originalRight=document.getElementById("rightSeats");
+  const modalLeft=document.getElementById("modalLeftSeats");
+  const modalRight=document.getElementById("modalRightSeats");
+
+  const leftId=originalLeft.id,rightId=originalRight.id;
+  originalLeft.id="tempLeftSeats";
+  originalRight.id="tempRightSeats";
+  modalLeft.id="leftSeats";
+  modalRight.id="rightSeats";
+  renderSeats(assignment);
+  modalLeft.id="modalLeftSeats";
+  modalRight.id="modalRightSeats";
+  originalLeft.id=leftId;
+  originalRight.id=rightId;
+}
+
+async function loadStudents(){
+  const data=await adminRequest("list_students");
+  managedStudents=data.students;
+  STUDENTS=managedStudents.filter(student=>student.is_active).map(student=>student.name);
+
+  document.getElementById("activeStudentCount").textContent=STUDENTS.length;
+  document.getElementById("allStudentCount").textContent=managedStudents.length;
+
+  document.getElementById("studentTableBody").innerHTML=managedStudents.map(student=>`
+    <tr data-id="${student.id}">
+      <td><input class="student-name" value="${escapeHtml(student.name)}"></td>
+      <td><input class="student-note" value="${escapeHtml(student.note || "")}"></td>
+      <td><input class="student-active" type="checkbox" ${student.is_active ? "checked" : ""}></td>
+      <td>
+        <div class="actions">
+          <button class="save-student">수정</button>
+          <button class="danger delete-student">삭제</button>
+        </div>
+      </td>
+    </tr>
+  `).join("");
+
+  document.querySelectorAll(".save-student").forEach(button=>{
+    button.onclick=()=>updateStudent(button.closest("tr"));
+  });
+  document.querySelectorAll(".delete-student").forEach(button=>{
+    button.onclick=()=>deleteStudent(button.closest("tr"));
+  });
+}
+
+async function addStudent(){
+  const status=document.getElementById("studentStatus");
+  try{
+    await adminRequest("create_student",{
+      name:document.getElementById("newStudentName").value,
+      note:document.getElementById("newStudentNote").value,
+      isActive:true
+    });
+    document.getElementById("newStudentName").value="";
+    document.getElementById("newStudentNote").value="";
+    status.className="status ok";
+    status.textContent="학생을 추가했습니다.";
+    await loadStudents();
+  }catch(error){
+    status.className="status warn";
+    status.textContent=error.message;
+  }
+}
+
+async function updateStudent(row){
+  const status=document.getElementById("studentStatus");
+  try{
+    await adminRequest("update_student",{
+      id:Number(row.dataset.id),
+      name:row.querySelector(".student-name").value,
+      note:row.querySelector(".student-note").value,
+      isActive:row.querySelector(".student-active").checked
+    });
+    status.className="status ok";
+    status.textContent="학생 정보를 수정했습니다.";
+    await loadStudents();
+  }catch(error){
+    status.className="status warn";
+    status.textContent=error.message;
+  }
+}
+
+async function deleteStudent(row){
+  const name=row.querySelector(".student-name").value;
+  if(!confirm(`${name} 학생 정보를 삭제할까요?`)) return;
+  const status=document.getElementById("studentStatus");
+  try{
+    await adminRequest("delete_student",{id:Number(row.dataset.id)});
+    status.className="status ok";
+    status.textContent="학생 정보를 삭제했습니다.";
+    await loadStudents();
+  }catch(error){
+    status.className="status warn";
+    status.textContent=error.message;
+  }
+}
+
 async function loadSchedules(){
   const data=await adminRequest("list_schedules");
   savedSchedules=data.schedules;
-
   document.getElementById("scheduleList").innerHTML=savedSchedules.length
     ? savedSchedules.map(item=>`
-        <div class="box" style="margin-bottom:8px">
+        <div class="schedule-card">
           <b>${escapeHtml(item.effective_date)}</b>
+          <div class="actions">
+            <button onclick="viewSchedule(${item.id})">보기</button>
+            <button class="danger" onclick="deleteSchedule(${item.id},'${escapeHtml(item.effective_date)}')">삭제</button>
+          </div>
         </div>
       `).join("")
-    : "예약된 자리표가 없습니다.";
+    : '<p class="muted">예약된 자리표가 없습니다.</p>';
 }
+
+window.viewSchedule=function(id){
+  const schedule=savedSchedules.find(item=>item.id===id);
+  if(!schedule)return;
+  document.getElementById("scheduleModalTitle").textContent=`${schedule.effective_date} 자리표`;
+  renderModalSeats(schedule.assignment || {});
+  document.getElementById("scheduleModal").classList.add("open");
+};
+
+window.deleteSchedule=async function(id,date){
+  if(!confirm(`${date} 자리표 예약을 삭제할까요?`)) return;
+  await adminRequest("delete_schedule",{id});
+  await loadSchedules();
+};
 
 async function showAdmin(){
   document.getElementById("loginSection").style.display="none";
@@ -260,151 +369,88 @@ async function showAdmin(){
   document.getElementById("effectiveDate").value=today();
   document.getElementById("menuDate").value=today();
   renderSeats({});
-  await loadSchedules();
+  await Promise.all([loadStudents(),loadSchedules()]);
 }
 
-document.getElementById("loginButton").addEventListener("click",async()=>{
+document.getElementById("loginButton").onclick=async()=>{
   const status=document.getElementById("loginStatus");
-
   try{
     await adminRequest("login");
-
     sessionStorage.setItem("adminId",document.getElementById("adminId").value.trim());
     sessionStorage.setItem("adminPassword",document.getElementById("adminPassword").value);
-
-    status.className="status ok";
-    status.textContent="로그인되었습니다.";
     await showAdmin();
-  }catch(error){
-    status.className="status warn";
-    status.textContent=error.message;
-  }
-});
-
-document.getElementById("logoutButton").addEventListener("click",()=>{
-  sessionStorage.removeItem("adminId");
-  sessionStorage.removeItem("adminPassword");
-  location.reload();
-});
-
-document.getElementById("generateSeatButton").addEventListener("click",generateAssignment);
-
-document.getElementById("saveSeatButton").addEventListener("click",async()=>{
+  }catch(error){status.className="status warn";status.textContent=error.message}
+};
+document.getElementById("logoutButton").onclick=()=>{sessionStorage.clear();location.reload()};
+document.getElementById("generateSeatButton").onclick=generateAssignment;
+document.getElementById("saveSeatButton").onclick=async()=>{
   const date=document.getElementById("effectiveDate").value;
-
-  if(!date || !candidateAssignment){
-    alert("적용 날짜와 자리표를 확인하세요.");
-    return;
-  }
-
   try{
-    await adminRequest("save_schedule",{
-      effectiveDate:date,
-      assignment:candidateAssignment
-    });
-
+    await adminRequest("save_schedule",{effectiveDate:date,assignment:candidateAssignment});
     document.getElementById("seatStatus").className="status ok";
     document.getElementById("seatStatus").textContent=`${date} 적용 자리표를 예약했습니다.`;
     document.getElementById("saveSeatButton").disabled=true;
     await loadSchedules();
-  }catch(error){
-    document.getElementById("seatStatus").className="status warn";
-    document.getElementById("seatStatus").textContent=error.message;
-  }
-});
+  }catch(error){document.getElementById("seatStatus").className="status warn";document.getElementById("seatStatus").textContent=error.message}
+};
 
-document.getElementById("fetchMenuButton").addEventListener("click",async()=>{
+document.getElementById("fetchMenuButton").onclick=async()=>{
   const status=document.getElementById("fetchMenuStatus");
   const date=document.getElementById("menuDate").value;
-
-  status.className="status";
   status.textContent="Welplan 메뉴를 가져오는 중입니다.";
-
   try{
-    const response=await fetch(`/api/fetch-welplan-menu?date=${date.replaceAll("-","")}`,{
-      cache:"no-store"
-    });
-
+    const response=await fetch(`/api/fetch-welplan-menu?date=${date.replaceAll("-","")}`,{cache:"no-store"});
     const data=await response.json();
-
-    if(!response.ok || !data.ok){
-      throw new Error(data.message || `HTTP ${response.status}`);
-    }
-
+    if(!response.ok||!data.ok)throw new Error(data.message||`HTTP ${response.status}`);
     status.className="status ok";
-    status.innerHTML=`
-      메뉴 저장 성공<br>
-      <span style="white-space:pre-line">${escapeHtml(data.result.menuText)}</span>
-    `;
-  }catch(error){
-    status.className="status warn";
-    status.textContent=`메뉴 수집 실패: ${error.message}`;
-  }
-});
+    status.innerHTML=`메뉴 저장 성공<br><span style="white-space:pre-line">${escapeHtml(data.result.menuText)}</span>`;
+  }catch(error){status.className="status warn";status.textContent=`메뉴 수집 실패: ${error.message}`}
+};
 
-document.getElementById("saveMenuButton").addEventListener("click",async()=>{
+document.getElementById("saveMenuButton").onclick=async()=>{
   const status=document.getElementById("menuStatus");
-
   try{
-    await adminRequest("save_menu",{
-      date:document.getElementById("menuDate").value,
-      menu10:document.getElementById("menu10").value,
-      menu20:document.getElementById("menu20").value
-    });
+    await adminRequest("save_menu",{date:document.getElementById("menuDate").value,menu10:document.getElementById("menu10").value,menu20:document.getElementById("menu20").value});
+    status.className="status ok";status.textContent="메뉴를 저장했습니다.";
+  }catch(error){status.className="status warn";status.textContent=error.message}
+};
 
-    status.className="status ok";
-    status.textContent="메뉴를 저장했습니다.";
-  }catch(error){
-    status.className="status warn";
-    status.textContent=error.message;
-  }
-});
-
-document.getElementById("loadChoicesButton").addEventListener("click",async()=>{
+document.getElementById("loadChoicesButton").onclick=async()=>{
   const box=document.getElementById("choicesList");
-
   try{
-    const data=await adminRequest("list_choices",{
-      date:document.getElementById("menuDate").value
-    });
+    const data=await adminRequest("list_choices",{date:document.getElementById("menuDate").value});
+    const count10=data.choices.filter(x=>x.floor===10).length;
+    const count20=data.choices.filter(x=>x.floor===20).length;
+    box.innerHTML=`
+      <p><b>10층 ${count10}명 · 20층 ${count20}명</b></p>
+      ${data.choices.map(item=>`${escapeHtml(item.student_name)} · ${item.floor}층${item.is_default ? " (자동)" : ""}`).join("<br>")}
+    `;
+  }catch(error){box.textContent=error.message}
+};
 
-    box.innerHTML=data.choices.length
-      ? data.choices.map(item=>`${escapeHtml(item.student_name)} · ${item.floor}층`).join("<br>")
-      : "선택자가 없습니다.";
-  }catch(error){
-    box.textContent=error.message;
-  }
-});
-
-document.getElementById("generateGroupsButton").addEventListener("click",async()=>{
+document.getElementById("generateGroupsButton").onclick=async()=>{
   const status=document.getElementById("groupStatus");
+  try{await adminRequest("generate_groups");status.className="status ok";status.textContent="오늘 20층 식사 조를 생성했습니다."}
+  catch(error){status.className="status warn";status.textContent=error.message}
+};
 
-  try{
-    await adminRequest("generate_groups");
-    status.className="status ok";
-    status.textContent="오늘 20층 식사 조를 생성했습니다.";
-  }catch(error){
-    status.className="status warn";
-    status.textContent=error.message;
-  }
-});
+document.getElementById("addStudentButton").onclick=addStudent;
+document.getElementById("closeScheduleModal").onclick=()=>document.getElementById("scheduleModal").classList.remove("open");
+document.getElementById("scheduleModal").onclick=event=>{if(event.target.id==="scheduleModal")event.currentTarget.classList.remove("open")};
 
 function openAdminPanel(panel){
-  document.getElementById("seatAdminPanel").classList.toggle("active",panel==="seat");
-  document.getElementById("menuAdminPanel").classList.toggle("active",panel==="menu");
-  document.getElementById("seatAdminTab").classList.toggle("primary",panel==="seat");
-  document.getElementById("menuAdminTab").classList.toggle("primary",panel==="menu");
+  ["seat","menu","student"].forEach(name=>{
+    document.getElementById(`${name}AdminPanel`).classList.toggle("active",panel===name);
+    document.getElementById(`${name}AdminTab`).classList.toggle("primary",panel===name);
+  });
+  if(panel==="student")loadStudents();
 }
+document.getElementById("seatAdminTab").onclick=()=>openAdminPanel("seat");
+document.getElementById("menuAdminTab").onclick=()=>openAdminPanel("menu");
+document.getElementById("studentAdminTab").onclick=()=>openAdminPanel("student");
 
-document.getElementById("seatAdminTab").addEventListener("click",()=>openAdminPanel("seat"));
-document.getElementById("menuAdminTab").addEventListener("click",()=>openAdminPanel("menu"));
-
-if(sessionStorage.getItem("adminId") && sessionStorage.getItem("adminPassword")){
-  adminRequest("login")
-    .then(showAdmin)
-    .catch(()=>{
-      sessionStorage.clear();
-    });
+if(sessionStorage.getItem("adminId")&&sessionStorage.getItem("adminPassword")){
+  adminRequest("login").then(showAdmin).catch(()=>sessionStorage.clear());
 }
 </script>
 </body>

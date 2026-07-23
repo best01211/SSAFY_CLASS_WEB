@@ -19,6 +19,11 @@ function getClient() {
   });
 }
 
+function validateCredentials(body) {
+  return body.adminId === ADMIN_ID &&
+    body.adminPassword === ADMIN_PASSWORD;
+}
+
 export default async function handler(request, response) {
   if (request.method !== "POST") {
     return response.status(405).json({
@@ -30,10 +35,7 @@ export default async function handler(request, response) {
   try {
     const body = request.body ?? {};
 
-    if (
-      body.adminId !== ADMIN_ID ||
-      body.adminPassword !== ADMIN_PASSWORD
-    ) {
+    if (!validateCredentials(body)) {
       return response.status(401).json({
         ok: false,
         message: "관리자 아이디 또는 비밀번호가 올바르지 않습니다.",
@@ -78,18 +80,114 @@ export default async function handler(request, response) {
       return response.status(200).json({ ok: true });
     }
 
-    if (body.action === "list_choices") {
+    if (body.action === "delete_schedule") {
+      const { error } = await sb
+        .from("seating_schedules")
+        .delete()
+        .eq("id", body.id);
+
+      if (error) throw error;
+      return response.status(200).json({ ok: true });
+    }
+
+    if (body.action === "list_students") {
       const { data, error } = await sb
-        .from("meal_choices")
+        .from("students")
         .select("*")
-        .eq("choice_date", body.date)
-        .order("floor")
-        .order("student_name");
+        .order("name");
 
       if (error) throw error;
       return response.status(200).json({
         ok: true,
-        choices: data ?? [],
+        students: data ?? [],
+      });
+    }
+
+    if (body.action === "create_student") {
+      const name = String(body.name ?? "").trim();
+
+      if (!name) {
+        return response.status(400).json({
+          ok: false,
+          message: "학생 이름을 입력하세요.",
+        });
+      }
+
+      const { error } = await sb
+        .from("students")
+        .insert({
+          name,
+          note: String(body.note ?? "").trim() || null,
+          is_active: body.isActive !== false,
+        });
+
+      if (error) throw error;
+      return response.status(200).json({ ok: true });
+    }
+
+    if (body.action === "update_student") {
+      const name = String(body.name ?? "").trim();
+
+      if (!body.id || !name) {
+        return response.status(400).json({
+          ok: false,
+          message: "학생 ID와 이름이 필요합니다.",
+        });
+      }
+
+      const { error } = await sb
+        .from("students")
+        .update({
+          name,
+          note: String(body.note ?? "").trim() || null,
+          is_active: body.isActive !== false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", body.id);
+
+      if (error) throw error;
+      return response.status(200).json({ ok: true });
+    }
+
+    if (body.action === "delete_student") {
+      const { error } = await sb
+        .from("students")
+        .delete()
+        .eq("id", body.id);
+
+      if (error) throw error;
+      return response.status(200).json({ ok: true });
+    }
+
+    if (body.action === "list_choices") {
+      const { data: students, error: studentError } = await sb
+        .from("students")
+        .select("name")
+        .eq("is_active", true)
+        .order("name");
+
+      if (studentError) throw studentError;
+
+      const { data: choices, error: choiceError } = await sb
+        .from("meal_choices")
+        .select("*")
+        .eq("choice_date", body.date);
+
+      if (choiceError) throw choiceError;
+
+      const choiceMap = new Map(
+        (choices ?? []).map(choice => [choice.student_name, choice.floor])
+      );
+
+      const resolved = (students ?? []).map(student => ({
+        student_name: student.name,
+        floor: choiceMap.get(student.name) ?? 20,
+        is_default: !choiceMap.has(student.name),
+      }));
+
+      return response.status(200).json({
+        ok: true,
+        choices: resolved,
       });
     }
 

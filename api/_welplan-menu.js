@@ -126,17 +126,53 @@ function isLunchMenu(menu) {
   return mealTimeId === "2";
 }
 
+
+function findImageUrl(value, visited = new Set()) {
+  if (!value) return "";
+
+  if (typeof value === "string") {
+    const text = clean(value);
+    if (/^https?:\/\//i.test(text) &&
+        /\.(png|jpe?g|webp|gif)(\?|$)/i.test(text)) {
+      return text;
+    }
+    return "";
+  }
+
+  if (typeof value !== "object" || visited.has(value)) return "";
+  visited.add(value);
+
+  const preferredKeys = [
+    "imageUrl", "imageURL", "image", "photoUrl",
+    "photoURL", "thumbnailUrl", "thumbnailURL", "pictureUrl"
+  ];
+
+  for (const key of preferredKeys) {
+    const candidate = value?.[key];
+    if (typeof candidate === "string" && /^https?:\/\//i.test(candidate)) {
+      return candidate;
+    }
+  }
+
+  for (const child of Object.values(value)) {
+    const found = findImageUrl(child, visited);
+    if (found) return found;
+  }
+
+  return "";
+}
+
 function normalizeMenu(menu) {
   const title = menuTitle(menu);
   if (!title) return null;
   const sides = componentNames(menu).filter((name) => name !== title);
-  return { title, sides };
+  return { title, sides, imageUrl: findImageUrl(menu) || null };
 }
 
 function uniqueMenuObjects(menus) {
   const map = new Map();
   for (const menu of menus) {
-    const key = `${menu.title}|${menu.sides.join("|")}`;
+    const key = `${menu.title}|${menu.sides.join("|")}|${menu.imageUrl ?? ""}`;
     if (!map.has(key)) map.set(key, menu);
   }
   return [...map.values()];
@@ -226,6 +262,7 @@ export async function saveMenu(compactDate) {
     .upsert({
       menu_date: date,
       menu_20: menuText,
+      menu_20_items: result.menus,
       menu_20_source: "welplan-live-api",
       menu_20_source_url: pageUrl,
       menu_20_fetched_at: new Date().toISOString(),

@@ -61,3 +61,110 @@ textarea{min-height:90px}.login{max-width:420px;margin:40px auto}
   align-items:center;
   gap:7px;
 }
+
+
+.menu-items{
+  display:grid;
+  gap:12px;
+  margin-top:12px;
+}
+.menu-item-card{
+  display:grid;
+  grid-template-columns:120px 1fr;
+  gap:12px;
+  align-items:start;
+  border:1px solid var(--line);
+  border-radius:12px;
+  overflow:hidden;
+  background:white;
+}
+.menu-image,
+.menu-image-placeholder{
+  width:120px;
+  height:100px;
+  object-fit:cover;
+  background:#eef2f7;
+}
+.menu-image-placeholder{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:var(--muted);
+  font-size:13px;
+}
+.menu-item-body{
+  padding:12px 12px 12px 0;
+}
+.menu-item-body p{
+  margin:7px 0 0;
+  color:var(--muted);
+  line-height:1.55;
+}
+.admin-table{
+  width:100%;
+  border-collapse:collapse;
+}
+.admin-table th,
+.admin-table td{
+  border-bottom:1px solid var(--line);
+  padding:10px 8px;
+  vertical-align:middle;
+}
+.admin-table input{
+  min-width:120px;
+}
+.schedule-card{
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:12px;
+  margin-bottom:10px;
+}
+.schedule-card .actions{
+  margin-bottom:0;
+}
+.modal-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:1000;
+  background:rgba(15,23,42,.55);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+}
+.modal-backdrop.open{display:flex}
+.modal-card{
+  width:min(1100px,96vw);
+  max-height:94vh;
+  overflow:auto;
+  background:white;
+  border-radius:16px;
+  padding:18px;
+  box-shadow:0 24px 70px rgba(0,0,0,.25);
+}
+@media(max-width:650px){
+  .menu-item-card{grid-template-columns:90px 1fr}
+  .menu-image,.menu-image-placeholder{width:90px;height:90px}
+}
+
+
+.floor-default-box{
+  margin-top:14px;
+  padding:14px;
+  border:1px solid #c7d2fe;
+  border-radius:12px;
+  background:#eef2ff;
+}
+.floor-default-box strong{
+  display:block;
+  margin-bottom:7px;
+  color:#3730a3;
+}
+.floor-default-box p{
+  margin:0;
+  color:#4b5563;
+  line-height:1.6;
+}
+.floor-actions button{
+  flex:1 1 210px;
+}

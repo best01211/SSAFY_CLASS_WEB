@@ -52,8 +52,8 @@
 
         <h2>식사 층 선택</h2>
         <p class="muted">
-          10층 선택자는 조를 만들지 않습니다.
-          20층 선택자만 오전 11시에 자동으로 조가 생성됩니다.
+          모든 활성 학생은 처음부터 20층으로 자동 배정됩니다.
+          10층에서 먹는 학생만 오전 11시 전까지 10층으로 변경하세요.
         </p>
 
         <label for="studentName">이름</label>
@@ -65,17 +65,22 @@
           placeholder="이름을 입력하세요"
         >
 
-        <label for="floor">층</label>
-        <select id="floor">
-          <option value="10">10층</option>
-          <option value="20" selected>20층</option>
-        </select>
-
-        <div class="actions" style="margin-top:12px">
-          <button id="saveChoice" class="primary" type="button">선택 저장</button>
+        <div class="floor-default-box">
+          <strong>기본 식사 장소: 20층</strong>
+          <p>
+            20층에서 먹는 경우에는 아무것도 하지 않아도 됩니다.
+            10층에서 먹는 날만 아래 버튼으로 변경하세요.
+          </p>
         </div>
 
-        <div id="choiceStatus" class="status">이름과 층을 선택하세요.</div>
+        <div class="actions floor-actions" style="margin-top:12px">
+          <button id="select10Floor" class="primary" type="button">10층으로 변경</button>
+          <button id="reset20Floor" type="button">선택 취소 · 20층 복귀</button>
+        </div>
+
+        <div id="choiceStatus" class="status">
+          현재 기본 상태는 20층입니다.
+        </div>
       </div>
 
       <div class="card">
@@ -99,10 +104,25 @@ const menusBox=document.getElementById("menus");
 const groupsBox=document.getElementById("groups");
 const seatDateBox=document.getElementById("seatDate");
 const deadlineBox=document.getElementById("deadline");
-const saveChoiceButton=document.getElementById("saveChoice");
 const studentNameInput=document.getElementById("studentName");
-const floorSelect=document.getElementById("floor");
 const choiceStatusBox=document.getElementById("choiceStatus");
+const select10FloorButton=document.getElementById("select10Floor");
+const reset20FloorButton=document.getElementById("reset20Floor");
+let activeStudentNames=[];
+
+
+async function loadActiveStudents(){
+  const {data,error}=await sb
+    .from("students")
+    .select("name")
+    .eq("is_active",true)
+    .order("name");
+
+  if(error) throw error;
+
+  activeStudentNames=(data || []).map(student=>student.name);
+  STUDENTS=[...activeStudentNames];
+}
 
 function showPanel(id){
   document.querySelectorAll(".panel").forEach(panel=>panel.classList.remove("active"));
@@ -124,6 +144,28 @@ function renderMenus(menu){
     menu?.menu_20_source_url ||
     `https://welplan.pmh.codes/takein/${compactDate()}/all?restaurant=REST000133`;
 
+  const items=Array.isArray(menu?.menu_20_items)
+    ? menu.menu_20_items
+    : [];
+
+  const menuCards=items.length
+    ? items.map(item=>`
+        <article class="menu-item-card">
+          ${item.imageUrl
+            ? `<img class="menu-image" src="${escapeHtml(item.imageUrl)}"
+                 alt="${escapeHtml(item.title)}"
+                 loading="lazy"
+                 referrerpolicy="no-referrer">`
+            : `<div class="menu-image-placeholder">사진 없음</div>`
+          }
+          <div class="menu-item-body">
+            <b>${escapeHtml(item.title)}</b>
+            <p>${escapeHtml((item.sides || []).join(" · "))}</p>
+          </div>
+        </article>
+      `).join("")
+    : `<p class="menu-text">${escapeHtml(menu?.menu_20 || "메뉴를 불러오지 못했습니다.")}</p>`;
+
   menusBox.innerHTML=`
     <div class="box">
       <b>10층</b>
@@ -132,7 +174,7 @@ function renderMenus(menu){
 
     <div class="box">
       <b>20층</b>
-      <p class="menu-text">${escapeHtml(menu?.menu_20 || "메뉴를 불러오지 못했습니다.")}</p>
+      <div class="menu-items">${menuCards}</div>
       <p class="muted menu-source">
         <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">
           Welplan 원본 메뉴 보기
@@ -141,7 +183,6 @@ function renderMenus(menu){
     </div>
   `;
 }
-
 async function requestWelplanMenu(){
   const response=await fetch(
     `/api/fetch-welplan-menu?date=${compactDate()}`,
@@ -247,7 +288,8 @@ async function loadMealData(tryAutoFetch=false){
   }
 
   const isOpen=kstHour()<11;
-  saveChoiceButton.disabled=!isOpen;
+  select10FloorButton.disabled=!isOpen;
+  reset20FloorButton.disabled=!isOpen;
   deadlineBox.textContent=isOpen
     ? "오전 11시까지 선택 또는 변경할 수 있습니다."
     : "선택이 마감되었습니다.";
@@ -257,6 +299,8 @@ async function loadPage(){
   renderSeats({});
 
   try{
+    await loadActiveStudents();
+
     const {data,error}=await sb.rpc("get_active_seating");
 
     if(error) throw error;
@@ -277,32 +321,53 @@ async function loadPage(){
   }
 }
 
-saveChoiceButton.addEventListener("click",async()=>{
+function validatedStudentName(){
   const inputName=studentNameInput.value.trim();
 
   if(!inputName){
     choiceStatusBox.className="status warn";
     choiceStatusBox.textContent="이름을 입력하세요.";
     studentNameInput.focus();
-    return;
+    return null;
   }
 
-  if(!STUDENTS.includes(inputName)){
+  if(!activeStudentNames.includes(inputName)){
     choiceStatusBox.className="status warn";
-    choiceStatusBox.textContent="반 학생 명단에 없는 이름입니다. 이름을 정확히 입력하세요.";
+    choiceStatusBox.textContent="등록된 학생 이름이 아닙니다. 이름을 정확히 입력하세요.";
     studentNameInput.focus();
-    return;
+    return null;
   }
+
+  return inputName;
+}
+
+select10FloorButton.addEventListener("click",async()=>{
+  const inputName=validatedStudentName();
+  if(!inputName) return;
 
   const {error}=await sb.rpc("submit_meal_choice",{
     p_student_name:inputName,
-    p_floor:Number(floorSelect.value)
+    p_floor:10
   });
 
   choiceStatusBox.className=error ? "status warn" : "status ok";
   choiceStatusBox.textContent=error
     ? error.message
-    : `${inputName}: ${floorSelect.value}층으로 저장했습니다.`;
+    : `${inputName}: 오늘은 10층으로 변경했습니다.`;
+});
+
+reset20FloorButton.addEventListener("click",async()=>{
+  const inputName=validatedStudentName();
+  if(!inputName) return;
+
+  const {error}=await sb.rpc("cancel_meal_choice",{
+    p_student_name:inputName
+  });
+
+  choiceStatusBox.className=error ? "status warn" : "status ok";
+  choiceStatusBox.textContent=error
+    ? error.message
+    : `${inputName}: 선택을 취소하고 기본 20층으로 복귀했습니다.`;
 });
 
 loadPage();
