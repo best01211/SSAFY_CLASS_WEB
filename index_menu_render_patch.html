@@ -1,0 +1,37 @@
+
+<!-- index.html의 loadAll() 안에서 daily_menus를 읽는 기존 코드는 그대로 사용할 수 있습니다.
+     menu.menu_20 값에 Welplan에서 수집한 메뉴가 자동 저장됩니다.
+
+아래처럼 출처와 수집 시간을 추가로 표시하려면 메뉴 출력 코드를 교체하세요.
+-->
+
+<script>
+function renderTodayMenus(menu) {
+  const menus = document.getElementById("menus");
+
+  if (!menu) {
+    menus.innerHTML = '<p class="muted">오늘 메뉴가 아직 등록되지 않았습니다.</p>';
+    return;
+  }
+
+  const fetchedAt = menu.menu_20_fetched_at
+    ? new Date(menu.menu_20_fetched_at).toLocaleString("ko-KR")
+    : "수동 등록";
+
+  menus.innerHTML = `
+    <div class="menu-box">
+      <strong>10층</strong>
+      ${menu.menu_10 || "등록 전"}
+    </div>
+
+    <div class="menu-box">
+      <strong>20층</strong>
+      <div style="white-space:pre-line">${menu.menu_20 || "불러오는 중"}</div>
+      <p class="muted" style="font-size:12px;margin-bottom:0">
+        메뉴 출처: ${menu.menu_20_source || "수동 등록"}<br>
+        갱신: ${fetchedAt}
+      </p>
+    </div>
+  `;
+}
+</script>

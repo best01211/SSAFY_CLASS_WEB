@@ -1,0 +1,9 @@
+
+[build]
+  publish = "."
+
+[functions]
+  directory = "netlify/functions"
+
+# scheduled-welplan-menu.mjs 안에도 스케줄이 선언되어 있습니다.
+# 한국 시간 월~금 오전 7시 10분에 실행됩니다.
