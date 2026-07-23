@@ -1,14 +1,312 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>우리반 자리·점심</title><link rel="stylesheet" href="styles.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script></head><body>
-<header><div class="wrap top"><div><h1>우리반 자리·점심</h1><p>오늘 자리표와 메뉴를 확인하고 오전 11시 전까지 식사 층을 선택하세요.</p></div><a class="primary" href="admin.html">관리자</a></div></header>
-<main><div id="status" class="status">불러오는 중입니다.</div>
-<div class="tabs"><button class="primary" onclick="show('seat')">자리표</button><button onclick="show('meal')">오늘 점심</button></div>
-<section id="seat" class="panel active"><div class="card"><h2>현재 자리표</h2><p class="muted">적용일: <span id="seatDate">-</span></p><div class="classroom"><div class="side left" id="leftSeats"></div><div class="screen">스크린<br><br>선생님<br>사랑합니다</div><div class="side right" id="rightSeats"></div></div></div></section>
-<section id="meal" class="panel"><div class="grid"><div class="card"><h2>오늘 메뉴</h2><div id="menus" class="menu-grid"></div><hr><h2>식사 층 선택</h2><p class="muted">10층 선택자는 조를 만들지 않습니다. 20층 선택자만 오전 11시에 자동으로 조가 생성됩니다.</p><label>이름</label><select id="name"></select><label>층</label><select id="floor"><option value="10">10층</option><option value="20">20층</option></select><div class="actions" style="margin-top:12px"><button id="saveChoice" class="primary">선택 저장</button></div><div id="choiceStatus" class="status">이름과 층을 선택하세요.</div></div><div class="card"><h2>20층 식사 조</h2><div id="groups" class="groups"></div><p id="deadline" class="muted"></p></div></div></section></main>
-<script src="common.js"></script><script>
-const sb=supabase.createClient(APP_CONFIG.SUPABASE_URL,APP_CONFIG.SUPABASE_ANON_KEY);
-function show(id){document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active')}
-name.innerHTML='<option value="">이름 선택</option>'+STUDENTS.map(x=>`<option>${x}</option>`).join('');
-async function load(){renderSeats({});const d=today();const [{data:s},{data:m},{data:g}]=await Promise.all([sb.rpc('get_active_seating'),sb.from('daily_menus').select('*').eq('menu_date',d).maybeSingle(),sb.from('meal_groups').select('*').eq('group_date',d).order('group_no')]);if(s?.length){renderSeats(s[0].assignment||{});seatDate.textContent=s[0].effective_date}menus.innerHTML=m?`<div class="box"><b>10층</b><p>${m.menu_10||'등록 전'}</p></div><div class="box"><b>20층</b><p>${m.menu_20||'등록 전'}</p></div>`:'<p class="muted">오늘 메뉴가 아직 등록되지 않았습니다.</p>';groups.innerHTML=g?.length?g.map(x=>`<div class="box"><b>${x.group_no}조</b><p>${x.members.join(' · ')}</p></div>`).join(''):'<p class="muted">아직 조가 공개되지 않았습니다.</p>';const open=kstHour()<11;saveChoice.disabled=!open;deadline.textContent=open?'오전 11시까지 선택 또는 변경할 수 있습니다.':'선택이 마감되었습니다.';status.className='status ok';status.textContent='최신 정보를 불러왔습니다.'}
-saveChoice.onclick=async()=>{if(!name.value)return alert('이름을 선택하세요.');const {error}=await sb.rpc('submit_meal_choice',{p_student_name:name.value,p_floor:Number(floor.value)});choiceStatus.className=error?'status warn':'status ok';choiceStatus.textContent=error?error.message:`${name.value}: ${floor.value}층으로 저장했습니다.`};
-load();setInterval(load,60000);
-</script></body></html>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>우리반 자리·점심</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+<header>
+  <div class="wrap top">
+    <div>
+      <h1>우리반 자리·점심</h1>
+      <p>오늘 자리표와 메뉴를 확인하고 오전 11시 전까지 식사 층을 선택하세요.</p>
+    </div>
+    <a class="primary" href="admin.html">관리자</a>
+  </div>
+</header>
+
+<main>
+  <div id="status" class="status">불러오는 중입니다.</div>
+
+  <div class="tabs">
+    <button id="seatTab" class="primary" type="button">자리표</button>
+    <button id="mealTab" type="button">오늘 점심</button>
+  </div>
+
+  <section id="seat" class="panel active">
+    <div class="card">
+      <h2>현재 자리표</h2>
+      <p class="muted">적용일: <span id="seatDate">-</span></p>
+
+      <div class="classroom">
+        <div class="side left" id="leftSeats"></div>
+        <div class="corridor">복도</div>
+        <div class="side right" id="rightSeats"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="meal" class="panel">
+    <div class="grid">
+      <div class="card">
+        <h2>오늘 메뉴</h2>
+        <div id="menus" class="menu-grid">
+          <p class="muted">메뉴를 불러오는 중입니다.</p>
+        </div>
+
+        <hr>
+
+        <h2>식사 층 선택</h2>
+        <p class="muted">
+          10층 선택자는 조를 만들지 않습니다.
+          20층 선택자만 오전 11시에 자동으로 조가 생성됩니다.
+        </p>
+
+        <label for="studentName">이름</label>
+        <input
+          id="studentName"
+          type="text"
+          maxlength="20"
+          autocomplete="name"
+          placeholder="이름을 입력하세요"
+        >
+
+        <label for="floor">층</label>
+        <select id="floor">
+          <option value="10">10층</option>
+          <option value="20" selected>20층</option>
+        </select>
+
+        <div class="actions" style="margin-top:12px">
+          <button id="saveChoice" class="primary" type="button">선택 저장</button>
+        </div>
+
+        <div id="choiceStatus" class="status">이름과 층을 선택하세요.</div>
+      </div>
+
+      <div class="card">
+        <h2>20층 식사 조</h2>
+        <div id="groups" class="groups"></div>
+        <p id="deadline" class="muted"></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="common.js"></script>
+<script>
+const sb=supabase.createClient(
+  APP_CONFIG.SUPABASE_URL,
+  APP_CONFIG.SUPABASE_ANON_KEY
+);
+
+const statusBox=document.getElementById("status");
+const menusBox=document.getElementById("menus");
+const groupsBox=document.getElementById("groups");
+const seatDateBox=document.getElementById("seatDate");
+const deadlineBox=document.getElementById("deadline");
+const saveChoiceButton=document.getElementById("saveChoice");
+const studentNameInput=document.getElementById("studentName");
+const floorSelect=document.getElementById("floor");
+const choiceStatusBox=document.getElementById("choiceStatus");
+
+function showPanel(id){
+  document.querySelectorAll(".panel").forEach(panel=>panel.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+
+  document.getElementById("seatTab").classList.toggle("primary",id==="seat");
+  document.getElementById("mealTab").classList.toggle("primary",id==="meal");
+
+  if(id==="meal"){
+    loadMealData(true);
+  }
+}
+
+document.getElementById("seatTab").addEventListener("click",()=>showPanel("seat"));
+document.getElementById("mealTab").addEventListener("click",()=>showPanel("meal"));
+
+function renderMenus(menu){
+  const sourceUrl=
+    menu?.menu_20_source_url ||
+    `https://welplan.pmh.codes/takein/${compactDate()}/all?restaurant=REST000133`;
+
+  menusBox.innerHTML=`
+    <div class="box">
+      <b>10층</b>
+      <p class="menu-text">${escapeHtml(menu?.menu_10 || "등록 전")}</p>
+    </div>
+
+    <div class="box">
+      <b>20층</b>
+      <p class="menu-text">${escapeHtml(menu?.menu_20 || "메뉴를 불러오지 못했습니다.")}</p>
+      <p class="muted menu-source">
+        <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">
+          Welplan 원본 메뉴 보기
+        </a>
+      </p>
+    </div>
+  `;
+}
+
+async function requestWelplanMenu(){
+  const response=await fetch(
+    `/api/fetch-welplan-menu?date=${compactDate()}`,
+    { cache:"no-store" }
+  );
+
+  let body=null;
+  try{
+    body=await response.json();
+  }catch{
+    // JSON이 아닌 응답은 아래 오류로 처리
+  }
+
+  if(!response.ok || body?.ok===false){
+    throw new Error(
+      body?.message ||
+      `메뉴 자동 수집 실패: HTTP ${response.status}`
+    );
+  }
+
+  return body;
+}
+
+async function fetchTodayMenuFromDatabase(){
+  const {data,error}=await sb
+    .from("daily_menus")
+    .select("*")
+    .eq("menu_date",today())
+    .maybeSingle();
+
+  if(error) throw error;
+  return data;
+}
+
+async function loadMealData(tryAutoFetch=false){
+  menusBox.innerHTML='<p class="muted">오늘 메뉴를 불러오는 중입니다.</p>';
+
+  try{
+    let menu=await fetchTodayMenuFromDatabase();
+
+    /*
+      Supabase에 오늘 20층 메뉴가 없으면 Netlify Function을 즉시 호출합니다.
+      따라서 정기 수집 시간이 지나지 않았거나 예약 함수가 실패했어도
+      학생이 "오늘 점심" 창에 들어오면 한 번 더 수집을 시도합니다.
+    */
+    if(tryAutoFetch && !menu?.menu_20){
+      menusBox.innerHTML=`
+        <p class="muted inline-loading">
+          Welplan에서 오늘 20층 메뉴를 가져오는 중입니다.
+        </p>
+      `;
+
+      try{
+        await requestWelplanMenu();
+        menu=await fetchTodayMenuFromDatabase();
+      }catch(fetchError){
+        console.error(fetchError);
+
+        if(menu){
+          menu.menu_20_fetch_error=fetchError.message;
+        }
+      }
+    }
+
+    renderMenus(menu);
+
+    if(menu?.menu_20_fetch_error && !menu?.menu_20){
+      menusBox.insertAdjacentHTML(
+        "beforeend",
+        `<div class="status warn" style="grid-column:1/-1">
+          자동 수집 오류: ${escapeHtml(menu.menu_20_fetch_error)}
+        </div>`
+      );
+    }
+  }catch(error){
+    console.error(error);
+    renderMenus(null);
+    menusBox.insertAdjacentHTML(
+      "beforeend",
+      `<div class="status warn" style="grid-column:1/-1">
+        메뉴 DB 조회 오류: ${escapeHtml(error.message)}
+      </div>`
+    );
+  }
+
+  const {data:groups,error:groupsError}=await sb
+    .from("meal_groups")
+    .select("*")
+    .eq("group_date",today())
+    .order("group_no");
+
+  if(groupsError){
+    groupsBox.innerHTML=`<div class="status warn">${escapeHtml(groupsError.message)}</div>`;
+  }else{
+    groupsBox.innerHTML=groups?.length
+      ? groups.map(group=>`
+          <div class="box">
+            <b>${group.group_no}조</b>
+            <p>${escapeHtml(group.members.join(" · "))}</p>
+          </div>
+        `).join("")
+      : '<p class="muted">아직 조가 공개되지 않았습니다.</p>';
+  }
+
+  const isOpen=kstHour()<11;
+  saveChoiceButton.disabled=!isOpen;
+  deadlineBox.textContent=isOpen
+    ? "오전 11시까지 선택 또는 변경할 수 있습니다."
+    : "선택이 마감되었습니다.";
+}
+
+async function loadPage(){
+  renderSeats({});
+
+  try{
+    const {data,error}=await sb.rpc("get_active_seating");
+
+    if(error) throw error;
+
+    if(data?.length){
+      renderSeats(data[0].assignment || {});
+      seatDateBox.textContent=data[0].effective_date;
+    }
+
+    await loadMealData(false);
+
+    statusBox.className="status ok";
+    statusBox.textContent="최신 정보를 불러왔습니다.";
+  }catch(error){
+    console.error(error);
+    statusBox.className="status warn";
+    statusBox.textContent=`데이터를 불러오지 못했습니다: ${error.message}`;
+  }
+}
+
+saveChoiceButton.addEventListener("click",async()=>{
+  const inputName=studentNameInput.value.trim();
+
+  if(!inputName){
+    choiceStatusBox.className="status warn";
+    choiceStatusBox.textContent="이름을 입력하세요.";
+    studentNameInput.focus();
+    return;
+  }
+
+  if(!STUDENTS.includes(inputName)){
+    choiceStatusBox.className="status warn";
+    choiceStatusBox.textContent="반 학생 명단에 없는 이름입니다. 이름을 정확히 입력하세요.";
+    studentNameInput.focus();
+    return;
+  }
+
+  const {error}=await sb.rpc("submit_meal_choice",{
+    p_student_name:inputName,
+    p_floor:Number(floorSelect.value)
+  });
+
+  choiceStatusBox.className=error ? "status warn" : "status ok";
+  choiceStatusBox.textContent=error
+    ? error.message
+    : `${inputName}: ${floorSelect.value}층으로 저장했습니다.`;
+});
+
+loadPage();
+setInterval(loadPage,60000);
+</script>
+</body>
+</html>
