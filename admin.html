@@ -159,6 +159,7 @@
 let candidateAssignment=null;
 let savedSchedules=[];
 let managedStudents=[];
+let activeStudents=[];
 
 const RIGHT_SEATS=[3,4,5,8,9,10,13,14,15,18,19,20,23,24,25,28,29,30];
 const LEFT_SEATS=[2,6,7,11,12,16,17,21,22,27];
@@ -287,19 +288,19 @@ function evaluateAssignment(assignment){
 function generateAssignment(){
   const status=document.getElementById("seatStatus");
 
-  if(!STUDENTS.length){
+  if(!activeStudents.length){
     status.className="status warn";
     status.textContent="활성 학생이 없습니다.";
     return;
   }
 
-  if(STUDENTS.length>SEATS.length){
+  if(activeStudents.length>SEATS.length){
     status.className="status warn";
-    status.textContent=`활성 학생 ${STUDENTS.length}명은 사용 좌석 ${SEATS.length}개보다 많습니다.`;
+    status.textContent=`활성 학생 ${activeStudents.length}명은 사용 좌석 ${SEATS.length}개보다 많습니다.`;
     return;
   }
 
-  const emptyCount=SEATS.length-STUDENTS.length;
+  const emptyCount=SEATS.length-activeStudents.length;
 
   /*
     빈자리를 먼저 오른쪽에서 무작위로 정합니다.
@@ -327,7 +328,7 @@ function generateAssignment(){
 
   for(let attempt=0;attempt<GENERATION_ATTEMPTS;attempt++){
     const candidate={};
-    const shuffledStudents=shuffle(STUDENTS);
+    const shuffledStudents=shuffle(activeStudents);
     const shuffledSeats=shuffle(occupiedSeats);
 
     shuffledSeats.forEach((seat,index)=>{
@@ -394,9 +395,9 @@ function renderModalSeats(assignment){
 async function loadStudents(){
   const data=await adminRequest("list_students");
   managedStudents=data.students;
-  STUDENTS=managedStudents.filter(student=>student.is_active).map(student=>student.name);
+  activeStudents=managedStudents.filter(student=>student.is_active).map(student=>student.name);
 
-  document.getElementById("activeStudentCount").textContent=STUDENTS.length;
+  document.getElementById("activeStudentCount").textContent=activeStudents.length;
   document.getElementById("allStudentCount").textContent=managedStudents.length;
 
   document.getElementById("studentTableBody").innerHTML=managedStudents.map(student=>`

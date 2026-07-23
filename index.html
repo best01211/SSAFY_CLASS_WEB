@@ -121,7 +121,6 @@ async function loadActiveStudents(){
   if(error) throw error;
 
   activeStudentNames=(data || []).map(student=>student.name);
-  STUDENTS=[...activeStudentNames];
 }
 
 function showPanel(id){
