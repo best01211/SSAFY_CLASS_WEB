@@ -1,28 +1,19 @@
-# 우리반 자리·점심 자동 웹앱
+# 수정 내용
 
-## 동작
-- 관리자가 자리표를 생성하고 적용 날짜를 예약합니다.
-- 적용 날짜가 되면 학생 화면에 자동으로 새 자리표가 표시됩니다.
-- 관리자가 날짜별 10층/20층 메뉴를 등록합니다.
-- 학생은 당일 오전 11시 전까지 이름과 식사 층을 선택합니다.
-- 10층 선택자는 조를 만들지 않습니다.
-- 20층 선택자만 평일 오전 11시에 자동으로 2명씩 조가 생성됩니다.
-- 20층 선택자가 홀수면 한 조만 3명입니다.
+오류:
 
-## 설치
-1. Supabase 프로젝트를 생성합니다.
-2. SQL Editor에서 `supabase_schema.sql` 전체를 실행합니다.
-3. Authentication > Users에서 관리자 계정을 생성합니다.
-4. Project Settings > API에서 Project URL과 anon key를 확인합니다.
-5. `config.js`에 두 값을 입력합니다.
-6. 폴더 전체를 Netlify에 배포합니다.
+Assignment to constant variable.
 
-## 주소
-- 학생 화면: `/index.html`
-- 관리자 화면: `/admin.html`
+원인:
+common.js에서 STUDENTS가 const로 선언되어 있는데,
+index.html에서 Supabase 학생 목록으로 다시 할당하고 있었습니다.
 
-## 시간
-Supabase cron은 UTC 기준이므로 `0 2 * * 1-5`는 한국 시간 평일 오전 11시입니다.
+수정:
+const STUDENTS → let STUDENTS
 
-## 주의
-현재 학생은 이름만 선택합니다. 다른 학생 이름으로 대신 선택하는 것을 막으려면 학생별 PIN 또는 로그인 기능을 추가해야 합니다.
+적용:
+기존 프로젝트의 common.js를 이 파일로 덮어쓴 뒤 Git에 push하세요.
+
+git add common.js
+git commit -m "Fix dynamic student list assignment"
+git push
