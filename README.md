@@ -1,19 +1,31 @@
-# 수정 내용
+# 빈자리 오른쪽 랜덤 선정 패치
 
-오류:
+## 변경된 동작
 
-Assignment to constant variable.
+자리 생성 버튼을 누를 때마다:
 
-원인:
-common.js에서 STUDENTS가 const로 선언되어 있는데,
-index.html에서 Supabase 학생 목록으로 다시 할당하고 있었습니다.
+1. 필요한 빈자리 수를 계산합니다.
+2. 오른쪽 좌석 중에서 빈자리를 무작위로 선정합니다.
+3. 남은 좌석에 학생을 랜덤 배치합니다.
+4. 과거 같은 줄 조합이 최소가 되도록 여러 번 탐색합니다.
 
-수정:
-const STUDENTS → let STUDENTS
+예를 들어 활성 학생이 27명이면 오른쪽 좌석 중 한 곳이 매번 랜덤으로 비게 됩니다.
 
-적용:
-기존 프로젝트의 common.js를 이 파일로 덮어쓴 뒤 Git에 push하세요.
+```text
+3, 4, 5, 8, 9, 10, 13, 14, 15,
+18, 19, 20, 23, 24, 25, 28, 29, 30
+```
 
-git add common.js
-git commit -m "Fix dynamic student list assignment"
+오른쪽 좌석보다 빈자리 수가 많을 때만 왼쪽 좌석에서도 무작위로 빈자리를 만듭니다.
+
+## 적용
+
+기존 프로젝트의 `admin.html`만 덮어쓰세요.
+
+```bash
+git add admin.html
+git commit -m "Randomize empty seats on right side"
 git push
+```
+
+Vercel 배포가 끝난 뒤 `Ctrl + F5`로 새로고침하세요.

@@ -160,6 +160,13 @@ let candidateAssignment=null;
 let savedSchedules=[];
 let managedStudents=[];
 
+/*
+  빈자리는 먼저 오른쪽 좌석 중에서 무작위로 선정합니다.
+  오른쪽 좌석 수보다 빈자리가 많을 때만 왼쪽에서도 무작위로 선정합니다.
+*/
+const RIGHT_SEATS=[3,4,5,8,9,10,13,14,15,18,19,20,23,24,25,28,29,30];
+const LEFT_SEATS=[2,6,7,11,12,16,17,21,22,27];
+
 const credentials=()=>({
   adminId:sessionStorage.getItem("adminId") || document.getElementById("adminId")?.value.trim(),
   adminPassword:sessionStorage.getItem("adminPassword") || document.getElementById("adminPassword")?.value
@@ -204,33 +211,73 @@ function evaluateAssignment(assignment){
 }
 
 function generateAssignment(){
+  const status=document.getElementById("seatStatus");
+
   if(!STUDENTS.length){
-    document.getElementById("seatStatus").className="status warn";
-    document.getElementById("seatStatus").textContent="활성 학생이 없습니다.";
-    return;
-  }
-  if(STUDENTS.length>SEATS.length){
-    document.getElementById("seatStatus").className="status warn";
-    document.getElementById("seatStatus").textContent=`활성 학생 ${STUDENTS.length}명은 사용 좌석 ${SEATS.length}개보다 많습니다.`;
+    status.className="status warn";
+    status.textContent="활성 학생이 없습니다.";
     return;
   }
 
-  let best=null,bestRepeats=Infinity;
-  for(let attempt=0;attempt<50000;attempt++){
-    const people=shuffle([...STUDENTS,...Array(SEATS.length-STUDENTS.length).fill(null)]);
-    const seats=shuffle(SEATS),assignment={};
-    seats.forEach((seat,index)=>{if(people[index]) assignment[seat]=people[index]});
-    const repeats=evaluateAssignment(assignment);
-    if(repeats<bestRepeats){best=assignment;bestRepeats=repeats;if(repeats===0)break}
+  if(STUDENTS.length>SEATS.length){
+    status.className="status warn";
+    status.textContent=`활성 학생 ${STUDENTS.length}명은 사용 좌석 ${SEATS.length}개보다 많습니다.`;
+    return;
   }
+
+  /*
+    1. 필요한 빈자리 수를 계산합니다.
+    2. 오른쪽 좌석을 섞은 뒤 필요한 수만큼 무작위로 빈자리로 지정합니다.
+    3. 오른쪽 좌석만으로 부족할 때만 왼쪽 좌석에서도 무작위로 지정합니다.
+    4. 남은 좌석에 학생들을 배치합니다.
+  */
+  const emptyCount=SEATS.length-STUDENTS.length;
+  const shuffledRightSeats=shuffle(RIGHT_SEATS);
+  const rightEmptyCount=Math.min(emptyCount,RIGHT_SEATS.length);
+  const selectedEmptySeats=shuffledRightSeats.slice(0,rightEmptyCount);
+
+  if(emptyCount>RIGHT_SEATS.length){
+    const remainingEmptyCount=emptyCount-RIGHT_SEATS.length;
+    selectedEmptySeats.push(...shuffle(LEFT_SEATS).slice(0,remainingEmptyCount));
+  }
+
+  const emptySeats=new Set(selectedEmptySeats);
+  const occupiedSeats=SEATS.filter(seat=>!emptySeats.has(seat));
+
+  let best=null;
+  let bestRepeats=Infinity;
+
+  for(let attempt=0;attempt<50000;attempt++){
+    const shuffledStudents=shuffle(STUDENTS);
+    const shuffledSeats=shuffle(occupiedSeats);
+    const assignment={};
+
+    shuffledSeats.forEach((seat,index)=>{
+      assignment[seat]=shuffledStudents[index];
+    });
+
+    const repeats=evaluateAssignment(assignment);
+
+    if(repeats<bestRepeats){
+      best=assignment;
+      bestRepeats=repeats;
+      if(repeats===0) break;
+    }
+  }
+
   candidateAssignment=best;
   renderSeats(best);
   document.getElementById("saveSeatButton").disabled=false;
-  const status=document.getElementById("seatStatus");
+
+  const emptySeatText=[...emptySeats]
+    .sort((a,b)=>a-b)
+    .map(seat=>`${seat}번`)
+    .join(", ");
+
   status.className=bestRepeats ? "status warn" : "status ok";
   status.textContent=bestRepeats
-    ? `과거 같은 줄 조합 ${bestRepeats}건이 포함된 최소 중복 배치입니다.`
-    : "과거 같은 줄 조합 없이 생성했습니다.";
+    ? `빈자리: ${emptySeatText || "없음"} · 과거 같은 줄 조합 ${bestRepeats}건이 포함된 최소 중복 배치입니다.`
+    : `빈자리: ${emptySeatText || "없음"} · 과거 같은 줄 조합 없이 생성했습니다.`;
 }
 
 function renderModalSeats(assignment){
