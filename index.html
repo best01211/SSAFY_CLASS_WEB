@@ -227,10 +227,10 @@ async function loadMealData(tryAutoFetch=false){
       따라서 정기 수집 시간이 지나지 않았거나 예약 함수가 실패했어도
       학생이 "오늘 점심" 창에 들어오면 한 번 더 수집을 시도합니다.
     */
-    if(tryAutoFetch && !menu?.menu_20){
+    if(tryAutoFetch && (!menu?.menu_10 || !menu?.menu_20)){
       menusBox.innerHTML=`
         <p class="muted inline-loading">
-          Welplan에서 오늘 20층 메뉴를 가져오는 중입니다.
+          GitHub에서 10층, Welplan에서 20층 메뉴를 가져오는 중입니다.
         </p>
       `;
 

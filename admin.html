@@ -70,11 +70,11 @@
     <section id="menuAdminPanel" class="panel">
       <div class="grid">
         <div class="card">
-          <h2>Welplan 20층 메뉴</h2>
+          <h2>10층·20층 메뉴 자동 수집</h2>
           <label for="menuDate">날짜</label>
           <input id="menuDate" type="date">
           <div class="actions">
-            <button id="fetchMenuButton" class="primary">Welplan 메뉴 지금 가져오기</button>
+            <button id="fetchMenuButton" class="primary">10층·20층 메뉴 지금 가져오기</button>
           </div>
           <div id="fetchMenuStatus" class="status">메뉴 수집 전입니다.</div>
           <hr>
@@ -538,7 +538,7 @@ document.getElementById("saveSeatButton").onclick=async()=>{
 document.getElementById("fetchMenuButton").onclick=async()=>{
   const status=document.getElementById("fetchMenuStatus");
   const date=document.getElementById("menuDate").value;
-  status.textContent="Welplan 메뉴를 가져오는 중입니다.";
+  status.textContent="10층·20층 메뉴를 가져오는 중입니다.";
   try{
     const response=await fetch(`/api/fetch-welplan-menu?date=${date.replaceAll("-","")}`,{cache:"no-store"});
     const data=await response.json();
