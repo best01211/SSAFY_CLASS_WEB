@@ -45,7 +45,7 @@
       <div class="grid">
         <div class="card">
           <h2>자리 배치 예약</h2>
-          <p class="muted">현재 활성 학생을 기준으로 자리표를 만듭니다.</p>
+          <p class="muted">2번 자리는 항상 비워두고, 최근 5회 기록을 참고해 같은 자리 반복을 최대한 피합니다.</p>
           <label for="effectiveDate">적용 날짜</label>
           <input id="effectiveDate" type="date">
           <div class="actions">
@@ -70,7 +70,7 @@
     <section id="menuAdminPanel" class="panel">
       <div class="grid">
         <div class="card">
-          <h2>10층·20층 메뉴 자동 수집</h2>
+          <h2>10층·20층 GitHub 메뉴 자동 수집</h2>
           <label for="menuDate">날짜</label>
           <input id="menuDate" type="date">
           <div class="actions">
@@ -122,9 +122,9 @@
           <div class="metric-row">
             <div class="metric"><b id="activeStudentCount">0</b><span>활성 학생</span></div>
             <div class="metric"><b id="allStudentCount">0</b><span>전체 기록</span></div>
-            <div class="metric"><b id="seatCapacity">28</b><span>사용 좌석</span></div>
+            <div class="metric"><b id="seatCapacity">27</b><span>배치 가능 좌석</span></div>
           </div>
-          <p class="muted">활성 학생이 28명을 넘으면 자리 생성이 불가능합니다.</p>
+          <p class="muted">2번 자리는 항상 빈자리이며, 활성 학생은 최대 27명까지 배치합니다.</p>
         </div>
       </div>
 
@@ -161,29 +161,26 @@ let savedSchedules=[];
 let managedStudents=[];
 let activeStudents=[];
 
+const FIXED_EMPTY_SEAT=2;
 const RIGHT_SEATS=[3,4,5,8,9,10,13,14,15,18,19,20,23,24,25,28,29,30];
-const LEFT_SEATS=[2,6,7,11,12,16,17,21,22,27];
+const LEFT_SEATS=[6,7,11,12,16,17,21,22,27];
+const AVAILABLE_SEATS=SEATS.filter(seat=>seat!==FIXED_EMPTY_SEAT);
 
 const SEATING_HISTORY_LIMIT=5;
-const SAME_ROW_PENALTY=20;
-const ADJACENT_PENALTY=50;
-const GENERATION_ATTEMPTS=5000;
+
+// 같은 자리에 다시 앉는 것을 가장 강하게 피합니다.
+// 최근 자리일수록 더 큰 패널티를 부여합니다.
+const SAME_SEAT_RECENCY_PENALTIES=[5000,3000,1800,1000,500];
+const SAME_ROW_PENALTY=35;
+const ADJACENT_PENALTY=80;
+const GENERATION_ATTEMPTS=20000;
 
 
 /*
-  빈자리 우선순위
-  - 오른쪽 뒤쪽 자리부터 비웁니다.
-  - 오른쪽 좌석을 모두 사용해야 할 정도로 학생 수가 적어질 때만 왼쪽도 비웁니다.
+  2번 좌석은 항상 빈자리입니다.
+  현재 활성 학생 수가 27명이면 나머지 27개 좌석을 모두 채웁니다.
+  27명보다 적을 때만 추가 빈자리를 오른쪽에서 먼저 무작위 선정합니다.
 */
-const EMPTY_SEAT_PRIORITY=[
-  30,29,28,
-  25,24,23,
-  20,19,18,
-  15,14,13,
-  10,9,8,
-  5,4,3,
-  27,22,21,17,16,12,11,7,6,2
-];
 
 const credentials=()=>({
   adminId:sessionStorage.getItem("adminId") || document.getElementById("adminId")?.value.trim(),
@@ -213,11 +210,6 @@ function shuffle(array){
 }
 
 function evaluateAssignment(assignment){
-  /*
-    적용 날짜가 가장 최근인 예약 5개만 참고합니다.
-    아직 적용되지 않은 미래 예약도 "예약 목록"에 저장되어 있으면
-    최근 적용 날짜 기준으로 포함됩니다.
-  */
   const recentSchedules=[...savedSchedules]
     .sort((a,b)=>String(b.effective_date).localeCompare(String(a.effective_date)))
     .slice(0,SEATING_HISTORY_LIMIT);
@@ -231,14 +223,12 @@ function evaluateAssignment(assignment){
         .map(seat=>schedule.assignment?.[seat])
         .filter(Boolean);
 
-      // 같은 줄에 있었던 모든 조합
       for(let i=0;i<names.length;i++){
         for(let j=i+1;j<names.length;j++){
           previousRowPairs.add(pairKey(names[i],names[j]));
         }
       }
 
-      // 같은 줄에서 바로 옆 좌석이었던 조합
       for(let i=0;i<row.length-1;i++){
         const first=schedule.assignment?.[row[i]];
         const second=schedule.assignment?.[row[i+1]];
@@ -250,8 +240,28 @@ function evaluateAssignment(assignment){
   });
 
   let score=0;
+  let sameSeatRepeats=0;
   let rowRepeats=0;
   let adjacentRepeats=0;
+
+  /*
+    1순위: 최근 5회와 같은 좌석 피하기.
+    바로 전 배치와 같은 자리면 5000점,
+    그 다음은 3000 → 1800 → 1000 → 500점.
+    따라서 같은 줄/옆자리보다 같은 자리 반복이 훨씬 불리합니다.
+  */
+  Object.entries(assignment).forEach(([seatText,student])=>{
+    if(!student) return;
+
+    const seat=Number(seatText);
+
+    recentSchedules.forEach((schedule,index)=>{
+      if(schedule.assignment?.[seat]===student){
+        score+=SAME_SEAT_RECENCY_PENALTIES[index] ?? 500;
+        sameSeatRepeats++;
+      }
+    });
+  });
 
   ROWS.forEach(row=>{
     const names=row
@@ -270,6 +280,7 @@ function evaluateAssignment(assignment){
     for(let i=0;i<row.length-1;i++){
       const first=assignment?.[row[i]];
       const second=assignment?.[row[i+1]];
+
       if(first && second && previousAdjacentPairs.has(pairKey(first,second))){
         score+=ADJACENT_PENALTY;
         adjacentRepeats++;
@@ -279,6 +290,7 @@ function evaluateAssignment(assignment){
 
   return {
     score,
+    sameSeatRepeats,
     rowRepeats,
     adjacentRepeats,
     historyCount:recentSchedules.length
@@ -294,33 +306,49 @@ function generateAssignment(){
     return;
   }
 
-  if(activeStudents.length>SEATS.length){
+  if(activeStudents.length>AVAILABLE_SEATS.length){
     status.className="status warn";
-    status.textContent=`활성 학생 ${activeStudents.length}명은 사용 좌석 ${SEATS.length}개보다 많습니다.`;
+    status.textContent=
+      `2번 자리는 항상 비워두므로 활성 학생은 최대 ${AVAILABLE_SEATS.length}명까지 배치할 수 있습니다. ` +
+      `현재 활성 학생은 ${activeStudents.length}명입니다.`;
     return;
   }
 
-  const emptyCount=SEATS.length-activeStudents.length;
-
   /*
-    빈자리를 먼저 오른쪽에서 무작위로 정합니다.
-    오른쪽 좌석 수보다 빈자리가 많을 때만 왼쪽에서도 선정합니다.
+    2번은 무조건 빈자리.
+    27명이라면 AVAILABLE_SEATS 27개를 전부 사용합니다.
+    학생이 27명보다 적을 때만 추가 빈자리가 생깁니다.
   */
-  const selectedEmptySeats=[];
-  const rightEmptyCount=Math.min(emptyCount,RIGHT_SEATS.length);
-  selectedEmptySeats.push(...shuffle(RIGHT_SEATS).slice(0,rightEmptyCount));
+  const additionalEmptyCount=AVAILABLE_SEATS.length-activeStudents.length;
+  const selectedAdditionalEmptySeats=[];
 
-  if(emptyCount>RIGHT_SEATS.length){
-    const leftEmptyCount=emptyCount-RIGHT_SEATS.length;
-    selectedEmptySeats.push(...shuffle(LEFT_SEATS).slice(0,leftEmptyCount));
+  if(additionalEmptyCount>0){
+    const rightEmptyCount=Math.min(additionalEmptyCount,RIGHT_SEATS.length);
+    selectedAdditionalEmptySeats.push(
+      ...shuffle(RIGHT_SEATS).slice(0,rightEmptyCount)
+    );
+
+    if(additionalEmptyCount>RIGHT_SEATS.length){
+      const leftEmptyCount=additionalEmptyCount-RIGHT_SEATS.length;
+      selectedAdditionalEmptySeats.push(
+        ...shuffle(LEFT_SEATS).slice(0,leftEmptyCount)
+      );
+    }
   }
 
-  const emptySeats=new Set(selectedEmptySeats);
-  const occupiedSeats=SEATS.filter(seat=>!emptySeats.has(seat));
+  const emptySeats=new Set([
+    FIXED_EMPTY_SEAT,
+    ...selectedAdditionalEmptySeats
+  ]);
+
+  const occupiedSeats=AVAILABLE_SEATS.filter(
+    seat=>!emptySeats.has(seat)
+  );
 
   let bestAssignment=null;
   let bestEvaluation={
     score:Number.POSITIVE_INFINITY,
+    sameSeatRepeats:Number.POSITIVE_INFINITY,
     rowRepeats:Number.POSITIVE_INFINITY,
     adjacentRepeats:Number.POSITIVE_INFINITY,
     historyCount:0
@@ -335,16 +363,25 @@ function generateAssignment(){
       candidate[seat]=shuffledStudents[index];
     });
 
+    // 안전장치: 2번에는 절대로 학생을 넣지 않습니다.
+    delete candidate[FIXED_EMPTY_SEAT];
+
     const evaluation=evaluateAssignment(candidate);
 
     if(
       evaluation.score<bestEvaluation.score ||
       (
         evaluation.score===bestEvaluation.score &&
+        evaluation.sameSeatRepeats<bestEvaluation.sameSeatRepeats
+      ) ||
+      (
+        evaluation.score===bestEvaluation.score &&
+        evaluation.sameSeatRepeats===bestEvaluation.sameSeatRepeats &&
         evaluation.adjacentRepeats<bestEvaluation.adjacentRepeats
       ) ||
       (
         evaluation.score===bestEvaluation.score &&
+        evaluation.sameSeatRepeats===bestEvaluation.sameSeatRepeats &&
         evaluation.adjacentRepeats===bestEvaluation.adjacentRepeats &&
         evaluation.rowRepeats<bestEvaluation.rowRepeats
       )
@@ -352,7 +389,17 @@ function generateAssignment(){
       bestAssignment=candidate;
       bestEvaluation=evaluation;
 
-      if(evaluation.score===0) break;
+      /*
+        같은 자리/같은 줄/옆자리 반복이 모두 0이면
+        더 탐색할 필요가 없습니다.
+      */
+      if(
+        evaluation.sameSeatRepeats===0 &&
+        evaluation.rowRepeats===0 &&
+        evaluation.adjacentRepeats===0
+      ){
+        break;
+      }
     }
   }
 
@@ -365,10 +412,15 @@ function generateAssignment(){
     .map(seat=>`${seat}번`)
     .join(", ");
 
-  status.className=bestEvaluation.score===0 ? "status ok" : "status warn";
+  status.className=
+    bestEvaluation.sameSeatRepeats===0
+      ? "status ok"
+      : "status warn";
+
   status.textContent=[
-    `빈자리: ${emptySeatText || "없음"}`,
+    `빈자리: ${emptySeatText}`,
     `최근 예약 ${bestEvaluation.historyCount}회 참고`,
+    `같은 자리 반복 ${bestEvaluation.sameSeatRepeats}건`,
     `같은 줄 반복 ${bestEvaluation.rowRepeats}건`,
     `옆자리 반복 ${bestEvaluation.adjacentRepeats}건`
   ].join(" · ");
