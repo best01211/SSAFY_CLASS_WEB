@@ -47,13 +47,12 @@
         <div id="menus" class="menu-grid">
           <p class="muted">메뉴를 불러오는 중입니다.</p>
         </div>
+      </div>
 
-        <hr>
-
-        <h2>식사 층 선택</h2>
+      <div class="card">
+        <h2>밥 친구</h2>
         <p class="muted">
-          모든 활성 학생은 처음부터 20층으로 자동 배정됩니다.
-          10층에서 먹는 학생만 오전 11시 전까지 10층으로 변경하세요.
+          원하는 학생만 신청하면 신청자끼리 3~4명으로 랜덤 매칭됩니다.
         </p>
 
         <label for="studentName">이름</label>
@@ -65,32 +64,7 @@
           placeholder="이름을 입력하세요"
         >
 
-        <div class="floor-default-box">
-          <strong>기본 식사 장소: 20층</strong>
-          <p>
-            20층에서 먹는 경우에는 아무것도 하지 않아도 됩니다.
-            10층에서 먹는 날만 아래 버튼으로 변경하세요.
-          </p>
-        </div>
-
-        <div class="actions floor-actions" style="margin-top:12px">
-          <button id="select10Floor" class="primary" type="button">10층으로 변경</button>
-          <button id="reset20Floor" type="button">선택 취소 · 20층 복귀</button>
-        </div>
-
-        <div id="choiceStatus" class="status">
-          현재 기본 상태는 20층입니다.
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>밥 친구</h2>
-        <p class="muted">
-          원하는 학생만 신청하면 신청자끼리 3~4명으로 랜덤 매칭됩니다.
-          식사 층 선택과 밥 친구 신청은 별개입니다.
-        </p>
-
-        <div class="actions" style="margin-bottom:12px">
+        <div class="actions" style="margin-top:12px;margin-bottom:12px">
           <button id="applyMealGroup" class="success" type="button">밥 친구 신청</button>
           <button id="cancelMealGroup" type="button">신청 취소</button>
         </div>
@@ -122,9 +96,6 @@ const groupsBox=document.getElementById("groups");
 const seatDateBox=document.getElementById("seatDate");
 const deadlineBox=document.getElementById("deadline");
 const studentNameInput=document.getElementById("studentName");
-const choiceStatusBox=document.getElementById("choiceStatus");
-const select10FloorButton=document.getElementById("select10Floor");
-const reset20FloorButton=document.getElementById("reset20Floor");
 const applyMealGroupButton=document.getElementById("applyMealGroup");
 const cancelMealGroupButton=document.getElementById("cancelMealGroup");
 const mealGroupApplyStatusBox=document.getElementById("mealGroupApplyStatus");
@@ -311,12 +282,10 @@ async function loadMealData(tryAutoFetch=false){
   }
 
   const isOpen=kstHour()<11;
-  select10FloorButton.disabled=!isOpen;
-  reset20FloorButton.disabled=!isOpen;
   applyMealGroupButton.disabled=!isOpen;
   cancelMealGroupButton.disabled=!isOpen;
   deadlineBox.textContent=isOpen
-    ? "오전 11시까지 식사 층 선택과 밥 친구 신청을 변경할 수 있습니다."
+    ? "오전 11시까지 밥 친구 신청 또는 취소가 가능합니다."
     : "오늘 신청이 마감되었습니다.";
 }
 
@@ -350,15 +319,15 @@ function validatedStudentName(){
   const inputName=studentNameInput.value.trim();
 
   if(!inputName){
-    choiceStatusBox.className="status warn";
-    choiceStatusBox.textContent="이름을 입력하세요.";
+    mealGroupApplyStatusBox.className="status warn";
+    mealGroupApplyStatusBox.textContent="이름을 입력하세요.";
     studentNameInput.focus();
     return null;
   }
 
   if(!activeStudentNames.includes(inputName)){
-    choiceStatusBox.className="status warn";
-    choiceStatusBox.textContent="등록된 학생 이름이 아닙니다. 이름을 정확히 입력하세요.";
+    mealGroupApplyStatusBox.className="status warn";
+    mealGroupApplyStatusBox.textContent="등록된 학생 이름이 아닙니다. 이름을 정확히 입력하세요.";
     studentNameInput.focus();
     return null;
   }
@@ -366,34 +335,6 @@ function validatedStudentName(){
   return inputName;
 }
 
-select10FloorButton.addEventListener("click",async()=>{
-  const inputName=validatedStudentName();
-  if(!inputName) return;
-
-  const {error}=await sb.rpc("submit_meal_choice",{
-    p_student_name:inputName,
-    p_floor:10
-  });
-
-  choiceStatusBox.className=error ? "status warn" : "status ok";
-  choiceStatusBox.textContent=error
-    ? error.message
-    : `${inputName}: 오늘은 10층으로 변경했습니다.`;
-});
-
-reset20FloorButton.addEventListener("click",async()=>{
-  const inputName=validatedStudentName();
-  if(!inputName) return;
-
-  const {error}=await sb.rpc("cancel_meal_choice",{
-    p_student_name:inputName
-  });
-
-  choiceStatusBox.className=error ? "status warn" : "status ok";
-  choiceStatusBox.textContent=error
-    ? error.message
-    : `${inputName}: 선택을 취소하고 기본 20층으로 복귀했습니다.`;
-});
 
 applyMealGroupButton.addEventListener("click",async()=>{
   const inputName=validatedStudentName();
