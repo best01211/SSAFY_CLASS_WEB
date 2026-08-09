@@ -84,7 +84,24 @@
       </div>
 
       <div class="card">
-        <h2>20층 식사 조</h2>
+        <h2>밥 친구</h2>
+        <p class="muted">
+          원하는 학생만 신청하면 신청자끼리 3~4명으로 랜덤 매칭됩니다.
+          식사 층 선택과 밥 친구 신청은 별개입니다.
+        </p>
+
+        <div class="actions" style="margin-bottom:12px">
+          <button id="applyMealGroup" class="success" type="button">밥 친구 신청</button>
+          <button id="cancelMealGroup" type="button">신청 취소</button>
+        </div>
+
+        <div id="mealGroupApplyStatus" class="status">
+          이름을 입력한 뒤 신청할 수 있습니다.
+        </div>
+
+        <hr>
+
+        <h2>오늘 밥 친구 조</h2>
         <div id="groups" class="groups"></div>
         <p id="deadline" class="muted"></p>
       </div>
@@ -108,6 +125,9 @@ const studentNameInput=document.getElementById("studentName");
 const choiceStatusBox=document.getElementById("choiceStatus");
 const select10FloorButton=document.getElementById("select10Floor");
 const reset20FloorButton=document.getElementById("reset20Floor");
+const applyMealGroupButton=document.getElementById("applyMealGroup");
+const cancelMealGroupButton=document.getElementById("cancelMealGroup");
+const mealGroupApplyStatusBox=document.getElementById("mealGroupApplyStatus");
 let activeStudentNames=[];
 
 
@@ -227,10 +247,10 @@ async function loadMealData(tryAutoFetch=false){
       따라서 정기 수집 시간이 지나지 않았거나 예약 함수가 실패했어도
       학생이 "오늘 점심" 창에 들어오면 한 번 더 수집을 시도합니다.
     */
-    if(tryAutoFetch && !menu?.menu_20){
+    if(tryAutoFetch && (!menu?.menu_10 || !menu?.menu_20)){
       menusBox.innerHTML=`
         <p class="muted inline-loading">
-          Welplan에서 오늘 20층 메뉴를 가져오는 중입니다.
+          GitHub에서 10층·20층 메뉴를 가져오는 중입니다.
         </p>
       `;
 
@@ -293,9 +313,11 @@ async function loadMealData(tryAutoFetch=false){
   const isOpen=kstHour()<11;
   select10FloorButton.disabled=!isOpen;
   reset20FloorButton.disabled=!isOpen;
+  applyMealGroupButton.disabled=!isOpen;
+  cancelMealGroupButton.disabled=!isOpen;
   deadlineBox.textContent=isOpen
-    ? "오전 11시까지 선택 또는 변경할 수 있습니다."
-    : "선택이 마감되었습니다.";
+    ? "오전 11시까지 식사 층 선택과 밥 친구 신청을 변경할 수 있습니다."
+    : "오늘 신청이 마감되었습니다.";
 }
 
 async function loadPage(){
@@ -372,6 +394,35 @@ reset20FloorButton.addEventListener("click",async()=>{
     ? error.message
     : `${inputName}: 선택을 취소하고 기본 20층으로 복귀했습니다.`;
 });
+
+applyMealGroupButton.addEventListener("click",async()=>{
+  const inputName=validatedStudentName();
+  if(!inputName) return;
+
+  const {error}=await sb.rpc("submit_meal_group_application",{
+    p_student_name:inputName
+  });
+
+  mealGroupApplyStatusBox.className=error ? "status warn" : "status ok";
+  mealGroupApplyStatusBox.textContent=error
+    ? error.message
+    : `${inputName}: 오늘 밥 친구 신청이 완료되었습니다.`;
+});
+
+cancelMealGroupButton.addEventListener("click",async()=>{
+  const inputName=validatedStudentName();
+  if(!inputName) return;
+
+  const {error}=await sb.rpc("cancel_meal_group_application",{
+    p_student_name:inputName
+  });
+
+  mealGroupApplyStatusBox.className=error ? "status warn" : "status ok";
+  mealGroupApplyStatusBox.textContent=error
+    ? error.message
+    : `${inputName}: 오늘 밥 친구 신청을 취소했습니다.`;
+});
+
 
 loadPage();
 setInterval(loadPage,60000);

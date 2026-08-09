@@ -205,10 +205,126 @@ export default async function handler(request, response) {
       return response.status(200).json({ ok: true });
     }
 
-    if (body.action === "generate_groups") {
-      const { error } = await sb.rpc("generate_today_meal_groups");
+    if (body.action === "list_group_applications") {
+      if (!body.date) {
+        return response.status(400).json({
+          ok: false,
+          message: "조회 날짜가 필요합니다.",
+        });
+      }
+
+      const { data, error } = await sb
+        .from("meal_group_applications")
+        .select("student_name, created_at")
+        .eq("application_date", body.date)
+        .order("created_at");
+
       if (error) throw error;
-      return response.status(200).json({ ok: true });
+
+      return response.status(200).json({
+        ok: true,
+        applications: data ?? [],
+      });
+    }
+
+    if (body.action === "generate_groups") {
+      const groupDate = String(body.date ?? "").trim();
+
+      if (!groupDate) {
+        return response.status(400).json({
+          ok: false,
+          message: "조를 생성할 날짜가 필요합니다.",
+        });
+      }
+
+      const { data: applications, error: applicationError } = await sb
+        .from("meal_group_applications")
+        .select("student_name")
+        .eq("application_date", groupDate);
+
+      if (applicationError) throw applicationError;
+
+      const names = (applications ?? [])
+        .map(item => String(item.student_name ?? "").trim())
+        .filter(Boolean);
+
+      const count = names.length;
+
+      if (count < 3) {
+        return response.status(400).json({
+          ok: false,
+          message: `신청자가 ${count}명입니다. 최소 3명부터 조를 만들 수 있습니다.`,
+        });
+      }
+
+      if (count === 5) {
+        return response.status(400).json({
+          ok: false,
+          message: "신청자가 5명이라 3~4명 조로 나눌 수 없습니다. 신청자를 조정한 뒤 다시 생성하세요.",
+        });
+      }
+
+      // Fisher-Yates shuffle
+      const shuffled = [...names];
+      for (let i = shuffled.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      // 3~4명 조만 생성
+      // 나머지 0: 3명 조만
+      // 나머지 1: 4명 조 1개 + 나머지 3명 조
+      // 나머지 2: 4명 조 2개 + 나머지 3명 조 (8명 이상)
+      const sizes = [];
+      const remainder = count % 3;
+
+      if (remainder === 0) {
+        for (let left = count; left > 0; left -= 3) sizes.push(3);
+      } else if (remainder === 1) {
+        sizes.push(4);
+        for (let left = count - 4; left > 0; left -= 3) sizes.push(3);
+      } else {
+        if (count < 8) {
+          return response.status(400).json({
+            ok: false,
+            message: `${count}명은 3~4명 조로 정확히 나눌 수 없습니다.`,
+          });
+        }
+        sizes.push(4, 4);
+        for (let left = count - 8; left > 0; left -= 3) sizes.push(3);
+      }
+
+      const rows = [];
+      let offset = 0;
+
+      sizes.forEach((size, index) => {
+        rows.push({
+          group_date: groupDate,
+          group_no: index + 1,
+          members: shuffled.slice(offset, offset + size),
+        });
+        offset += size;
+      });
+
+      const { error: deleteError } = await sb
+        .from("meal_groups")
+        .delete()
+        .eq("group_date", groupDate);
+
+      if (deleteError) throw deleteError;
+
+      const { error: insertError } = await sb
+        .from("meal_groups")
+        .insert(rows);
+
+      if (insertError) throw insertError;
+
+      return response.status(200).json({
+        ok: true,
+        applicantCount: count,
+        groupCount: rows.length,
+        groups: rows,
+      });
     }
 
     return response.status(400).json({

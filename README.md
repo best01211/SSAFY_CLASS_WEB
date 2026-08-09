@@ -1,28 +1,26 @@
-# 우리반 자리·점심 자동 웹앱
+# 적용 순서
+
+1. Supabase SQL Editor에서 `supabase_meal_group_applications.sql`을 한 번 실행합니다.
+2. 기존 프로젝트의 아래 파일을 덮어씁니다.
+
+- `index.html`
+- `admin.html`
+- `api/admin.js`
+
+3. Git에 반영합니다.
+
+```bash
+git add index.html admin.html api/admin.js
+git commit -m "Change lunch groups to opt-in matching"
+git push
+```
 
 ## 동작
-- 관리자가 자리표를 생성하고 적용 날짜를 예약합니다.
-- 적용 날짜가 되면 학생 화면에 자동으로 새 자리표가 표시됩니다.
-- 관리자가 날짜별 10층/20층 메뉴를 등록합니다.
-- 학생은 당일 오전 11시 전까지 이름과 식사 층을 선택합니다.
-- 10층 선택자는 조를 만들지 않습니다.
-- 20층 선택자만 평일 오전 11시에 자동으로 2명씩 조가 생성됩니다.
-- 20층 선택자가 홀수면 한 조만 3명입니다.
 
-## 설치
-1. Supabase 프로젝트를 생성합니다.
-2. SQL Editor에서 `supabase_schema.sql` 전체를 실행합니다.
-3. Authentication > Users에서 관리자 계정을 생성합니다.
-4. Project Settings > API에서 Project URL과 anon key를 확인합니다.
-5. `config.js`에 두 값을 입력합니다.
-6. 폴더 전체를 Netlify에 배포합니다.
-
-## 주소
-- 학생 화면: `/index.html`
-- 관리자 화면: `/admin.html`
-
-## 시간
-Supabase cron은 UTC 기준이므로 `0 2 * * 1-5`는 한국 시간 평일 오전 11시입니다.
-
-## 주의
-현재 학생은 이름만 선택합니다. 다른 학생 이름으로 대신 선택하는 것을 막으려면 학생별 PIN 또는 로그인 기능을 추가해야 합니다.
+- 식사 층 선택과 밥 친구 신청은 서로 독립적입니다.
+- 신청한 학생만 매칭됩니다.
+- 신청하지 않은 학생은 절대 조에 포함되지 않습니다.
+- 관리자가 선택한 날짜의 신청자만 조회/매칭합니다.
+- 조는 3~4명으로만 생성합니다.
+- 1명, 2명, 5명처럼 3~4명 조로 정확히 나눌 수 없는 경우 생성하지 않습니다.
+- 조를 다시 생성하면 해당 날짜의 기존 `meal_groups`를 지우고 신청자 기준으로 새로 만듭니다.
