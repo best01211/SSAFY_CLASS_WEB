@@ -48,11 +48,23 @@
           <p class="muted">2번 자리는 항상 비워두고, 최근 5회 기록을 참고해 같은 자리 반복을 최대한 피합니다.</p>
           <label for="effectiveDate">적용 날짜</label>
           <input id="effectiveDate" type="date">
+          <label for="seatMode">배치 모드</label>
+          <select id="seatMode">
+            <option value="auto">자동 배치</option>
+            <option value="manual">직접 배치</option>
+          </select>
+          <p class="muted">직접 배치에서는 자리별로 학생을 선택하세요. 이미 배치된 학생을 선택하면 두 학생의 자리를 바꿉니다.</p>
+          <details>
+            <summary>배정하지 않을 자리 설정</summary>
+            <p class="muted">선택한 자리는 항상 비워둡니다. 설정은 이 브라우저에 저장됩니다. 2번은 고정 빈자리입니다.</p>
+            <div id="excludedSeatOptions" class="excluded-seat-options"></div>
+          </details>
           <div class="actions">
             <button id="generateSeatButton" class="primary">자리 생성</button>
             <button id="saveSeatButton" class="success" disabled>이 자리표 예약</button>
           </div>
           <div id="seatStatus" class="status">자리 생성을 눌러주세요.</div>
+          <p id="assignmentProgress" class="muted" aria-live="polite"></p>
           <div class="classroom">
             <div class="side left" id="leftSeats"></div>
             <div class="corridor">복도</div>
@@ -125,7 +137,7 @@
             <div class="metric"><b id="allStudentCount">0</b><span>전체 기록</span></div>
             <div class="metric"><b id="seatCapacity">27</b><span>배치 가능 좌석</span></div>
           </div>
-          <p class="muted">2번 자리는 항상 빈자리이며, 활성 학생은 최대 27명까지 배치합니다.</p>
+          <p class="muted">2번과 배정 제외로 설정한 자리는 비워둡니다. 모든 활성 학생을 배치한 뒤 예약할 수 있습니다.</p>
         </div>
       </div>
 
@@ -166,6 +178,77 @@ const FIXED_EMPTY_SEAT=2;
 const RIGHT_SEATS=[3,4,5,8,9,10,13,14,15,18,19,20,23,24,25,28,29,30];
 const LEFT_SEATS=[6,7,11,12,16,17,21,22,27];
 const AVAILABLE_SEATS=SEATS.filter(seat=>seat!==FIXED_EMPTY_SEAT);
+const excludedSeats=new Set([FIXED_EMPTY_SEAT]);
+try{
+  const saved=JSON.parse(localStorage.getItem("excludedSeats") || "[]");
+  if(Array.isArray(saved)) saved.filter(seat=>SEATS.includes(seat)).forEach(seat=>excludedSeats.add(seat));
+}catch{}
+
+function assignmentError(){
+  const capacity=SEATS.length-excludedSeats.size;
+  if(!activeStudents.length) return "활성 학생이 없습니다.";
+  if(activeStudents.length>capacity) return `배치 가능 좌석은 ${capacity}개, 활성 학생은 ${activeStudents.length}명입니다. 배정 제외 자리를 줄여주세요.`;
+  const entries=Object.entries(candidateAssignment || {});
+  const names=entries.map(([,name])=>name);
+  if(entries.some(([seat,name])=>!SEATS.includes(Number(seat)) || excludedSeats.has(Number(seat)) || !activeStudents.includes(name))) return "자리표와 학생 명단을 다시 확인해주세요.";
+  if(new Set(names).size!==names.length) return "중복 배치된 학생이 있습니다.";
+  const missing=activeStudents.filter(name=>!names.includes(name));
+  return missing.length ? `미배정 ${missing.length}명: ${missing.join(", ")}` : "";
+}
+
+function assignStudent(seat,name){
+  if(excludedSeats.has(seat) || !SEATS.includes(seat)) return;
+  if(name && !activeStudents.includes(name)) return;
+  candidateAssignment ||= {};
+  const previous=candidateAssignment[seat];
+  const source=name ? Object.keys(candidateAssignment).find(key=>candidateAssignment[key]===name) : undefined;
+  delete candidateAssignment[seat];
+  if(source!==undefined){
+    delete candidateAssignment[source];
+    if(previous) candidateAssignment[source]=previous;
+  }
+  if(name) candidateAssignment[seat]=name;
+  renderSeatEditor();
+}
+
+function renderSeatEditor(){
+  renderSeats(candidateAssignment || {});
+  const manual=document.getElementById("seatMode").value==="manual";
+  document.getElementById("generateSeatButton").hidden=manual;
+  document.querySelectorAll("#leftSeats .seat, #rightSeats .seat").forEach(element=>{
+    const seat=Number(element.dataset.seat);
+    if(excludedSeats.has(seat)){
+      element.classList.add("excluded-seat");
+      element.querySelector("span").textContent="배정 제외";
+    }else if(manual){
+      const select=document.createElement("select");
+      select.setAttribute("aria-label",`${seat}번 자리 학생`);
+      select.innerHTML='<option value="">빈자리</option>'+activeStudents.map(name=>`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+      select.value=candidateAssignment?.[seat] || "";
+      select.onchange=()=>assignStudent(seat,select.value);
+      element.querySelector("span").replaceWith(select);
+    }
+  });
+  document.getElementById("seatCapacity").textContent=SEATS.length-excludedSeats.size;
+  const error=assignmentError();
+  document.getElementById("assignmentProgress").textContent=error || `${activeStudents.length}명 배치 완료 · 예약할 수 있습니다.`;
+  document.getElementById("saveSeatButton").disabled=!!error;
+}
+
+function renderExcludedOptions(){
+  const box=document.getElementById("excludedSeatOptions");
+  box.innerHTML=SEATS.slice().sort((a,b)=>a-b).map(seat=>`<label><input type="checkbox" value="${seat}" ${excludedSeats.has(seat)?"checked":""} ${seat===FIXED_EMPTY_SEAT?"disabled":""}>${seat}번</label>`).join("");
+  box.querySelectorAll("input").forEach(input=>input.onchange=()=>{
+    const seat=Number(input.value);
+    if(input.checked){
+      excludedSeats.add(seat);
+      if(candidateAssignment) delete candidateAssignment[seat];
+    }else excludedSeats.delete(seat);
+    try{localStorage.setItem("excludedSeats",JSON.stringify([...excludedSeats]));}catch{}
+    document.getElementById("seatStatus").textContent="제외 설정을 적용했습니다. 자동 생성하거나 직접 배치를 완료해주세요.";
+    renderSeatEditor();
+  });
+}
 
 const SEATING_HISTORY_LIMIT=5;
 
@@ -179,8 +262,8 @@ const GENERATION_ATTEMPTS=20000;
 
 /*
   2번 좌석은 항상 빈자리입니다.
-  현재 활성 학생 수가 27명이면 나머지 27개 좌석을 모두 채웁니다.
-  27명보다 적을 때만 추가 빈자리를 오른쪽에서 먼저 무작위 선정합니다.
+  관리자가 제외한 좌석도 비워둡니다.
+  사용 가능한 좌석보다 학생이 적으면 추가 빈자리를 오른쪽부터 선정합니다.
 */
 
 const credentials=()=>({
@@ -307,44 +390,22 @@ function generateAssignment(){
     return;
   }
 
-  if(activeStudents.length>AVAILABLE_SEATS.length){
+  const availableSeats=AVAILABLE_SEATS.filter(seat=>!excludedSeats.has(seat));
+  if(activeStudents.length>availableSeats.length){
     status.className="status warn";
     status.textContent=
-      `2번 자리는 항상 비워두므로 활성 학생은 최대 ${AVAILABLE_SEATS.length}명까지 배치할 수 있습니다. ` +
+      `배정 제외 설정에 따라 최대 ${availableSeats.length}명까지 배치할 수 있습니다. ` +
       `현재 활성 학생은 ${activeStudents.length}명입니다.`;
     return;
   }
 
   /*
-    2번은 무조건 빈자리.
-    27명이라면 AVAILABLE_SEATS 27개를 전부 사용합니다.
-    학생이 27명보다 적을 때만 추가 빈자리가 생깁니다.
+    제외 좌석을 먼저 빼고, 남는 빈자리를 오른쪽에서 우선 선정합니다.
   */
-  const additionalEmptyCount=AVAILABLE_SEATS.length-activeStudents.length;
-  const selectedAdditionalEmptySeats=[];
-
-  if(additionalEmptyCount>0){
-    const rightEmptyCount=Math.min(additionalEmptyCount,RIGHT_SEATS.length);
-    selectedAdditionalEmptySeats.push(
-      ...shuffle(RIGHT_SEATS).slice(0,rightEmptyCount)
-    );
-
-    if(additionalEmptyCount>RIGHT_SEATS.length){
-      const leftEmptyCount=additionalEmptyCount-RIGHT_SEATS.length;
-      selectedAdditionalEmptySeats.push(
-        ...shuffle(LEFT_SEATS).slice(0,leftEmptyCount)
-      );
-    }
-  }
-
-  const emptySeats=new Set([
-    FIXED_EMPTY_SEAT,
-    ...selectedAdditionalEmptySeats
-  ]);
-
-  const occupiedSeats=AVAILABLE_SEATS.filter(
-    seat=>!emptySeats.has(seat)
-  );
+  const additionalEmptyCount=availableSeats.length-activeStudents.length;
+  const emptyPriority=[...shuffle(RIGHT_SEATS.filter(seat=>!excludedSeats.has(seat))),...shuffle(LEFT_SEATS.filter(seat=>!excludedSeats.has(seat)))];
+  const emptySeats=new Set([...excludedSeats,...emptyPriority.slice(0,additionalEmptyCount)]);
+  const occupiedSeats=availableSeats.filter(seat=>!emptySeats.has(seat));
 
   let bestAssignment=null;
   let bestEvaluation={
@@ -405,8 +466,7 @@ function generateAssignment(){
   }
 
   candidateAssignment=bestAssignment;
-  renderSeats(bestAssignment);
-  document.getElementById("saveSeatButton").disabled=false;
+  renderSeatEditor();
 
   const emptySeatText=[...emptySeats]
     .sort((a,b)=>a-b)
@@ -450,6 +510,12 @@ async function loadStudents(){
   managedStudents=data.students;
   activeStudents=managedStudents.filter(student=>student.is_active).map(student=>student.name);
 
+  if(candidateAssignment){
+    Object.entries(candidateAssignment).forEach(([seat,name])=>{
+      if(!activeStudents.includes(name)) delete candidateAssignment[seat];
+    });
+  }
+  renderSeatEditor();
   document.getElementById("activeStudentCount").textContent=activeStudents.length;
   document.getElementById("allStudentCount").textContent=managedStudents.length;
 
@@ -562,7 +628,8 @@ async function showAdmin(){
   document.getElementById("adminApp").style.display="block";
   document.getElementById("effectiveDate").value=today();
   document.getElementById("menuDate").value=today();
-  renderSeats({});
+  renderExcludedOptions();
+  renderSeatEditor();
   await Promise.all([loadStudents(),loadSchedules()]);
 }
 
@@ -576,10 +643,20 @@ document.getElementById("loginButton").onclick=async()=>{
   }catch(error){status.className="status warn";status.textContent=error.message}
 };
 document.getElementById("logoutButton").onclick=()=>{sessionStorage.clear();location.reload()};
+document.getElementById("seatMode").onchange=()=>{
+  document.getElementById("seatStatus").className="status";
+  document.getElementById("seatStatus").textContent=document.getElementById("seatMode").value==="manual"
+    ? "각 자리에서 학생을 선택하세요. 빈자리를 선택하면 배치를 해제합니다."
+    : "자리 생성을 누르면 현재 자리표를 새로 생성합니다.";
+  renderSeatEditor();
+};
 document.getElementById("generateSeatButton").onclick=generateAssignment;
 document.getElementById("saveSeatButton").onclick=async()=>{
   const date=document.getElementById("effectiveDate").value;
   try{
+    const error=assignmentError();
+    if(error) throw new Error(error);
+    if(!date) throw new Error("적용 날짜를 선택해주세요.");
     await adminRequest("save_schedule",{effectiveDate:date,assignment:candidateAssignment});
     document.getElementById("seatStatus").className="status ok";
     document.getElementById("seatStatus").textContent=`${date} 적용 자리표를 예약했습니다.`;

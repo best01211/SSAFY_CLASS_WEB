@@ -35,7 +35,8 @@ function createSeat(number, className, assignment){
   const student=assignment?.[number];
   const element=document.createElement("div");
   element.className=`seat ${className} ${student ? "" : "empty"}`;
-  element.innerHTML=`<small>${number}번</small><span>${student || "빈자리"}</span>`;
+  element.dataset.seat=number;
+  element.innerHTML=`<small>${number}번</small><span>${escapeHtml(student || "빈자리")}</span>`;
   return element;
 }
 
