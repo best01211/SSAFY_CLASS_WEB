@@ -45,7 +45,7 @@
       <div class="grid">
         <div class="card">
           <h2>자리 배치 예약</h2>
-          <p class="muted">2번 자리는 항상 비워두고, 최근 5회 기록을 참고해 같은 자리 반복을 최대한 피합니다.</p>
+          <p class="muted">최근 5회 기록을 참고해 같은 자리 반복을 최대한 피합니다.</p>
           <label for="effectiveDate">적용 날짜</label>
           <input id="effectiveDate" type="date">
           <label for="seatMode">배치 모드</label>
@@ -56,7 +56,7 @@
           <p class="muted">직접 배치에서는 자리별로 학생을 선택하세요. 이미 배치된 학생을 선택하면 두 학생의 자리를 바꿉니다.</p>
           <details>
             <summary>배정하지 않을 자리 설정</summary>
-            <p class="muted">선택한 자리는 항상 비워둡니다. 설정은 이 브라우저에 저장됩니다. 2번은 고정 빈자리입니다.</p>
+            <p class="muted">선택한 자리는 항상 비워둡니다. 설정은 이 브라우저에 저장됩니다.</p>
             <div id="excludedSeatOptions" class="excluded-seat-options"></div>
           </details>
           <div class="actions">
@@ -135,9 +135,9 @@
           <div class="metric-row">
             <div class="metric"><b id="activeStudentCount">0</b><span>활성 학생</span></div>
             <div class="metric"><b id="allStudentCount">0</b><span>전체 기록</span></div>
-            <div class="metric"><b id="seatCapacity">27</b><span>배치 가능 좌석</span></div>
+            <div class="metric"><b id="seatCapacity">29</b><span>배치 가능 좌석</span></div>
           </div>
-          <p class="muted">2번과 배정 제외로 설정한 자리는 비워둡니다. 모든 활성 학생을 배치한 뒤 예약할 수 있습니다.</p>
+          <p class="muted">배정 제외로 설정한 자리만 비워둡니다. 모든 활성 학생을 배치한 뒤 예약할 수 있습니다.</p>
         </div>
       </div>
 
@@ -174,14 +174,19 @@ let savedSchedules=[];
 let managedStudents=[];
 let activeStudents=[];
 
-const FIXED_EMPTY_SEAT=2;
 const RIGHT_SEATS=[3,4,5,8,9,10,13,14,15,18,19,20,23,24,25,28,29,30];
-const LEFT_SEATS=[6,7,11,12,16,17,21,22,27];
-const AVAILABLE_SEATS=SEATS.filter(seat=>seat!==FIXED_EMPTY_SEAT);
-const excludedSeats=new Set([FIXED_EMPTY_SEAT]);
+const LEFT_SEATS=[2,6,7,11,12,16,17,21,22,26,27];
+const AVAILABLE_SEATS=[...SEATS];
+const excludedSeats=new Set();
 try{
   const saved=JSON.parse(localStorage.getItem("excludedSeats") || "[]");
   if(Array.isArray(saved)) saved.filter(seat=>SEATS.includes(seat)).forEach(seat=>excludedSeats.add(seat));
+  // 과거의 2번 고정 빈자리 설정을 한 번만 해제합니다.
+  if(!localStorage.getItem("fixedEmptySeatMigrationV2")){
+    excludedSeats.delete(2);
+    localStorage.setItem("excludedSeats",JSON.stringify([...excludedSeats]));
+    localStorage.setItem("fixedEmptySeatMigrationV2","done");
+  }
 }catch{}
 
 function assignmentError(){
@@ -237,7 +242,7 @@ function renderSeatEditor(){
 
 function renderExcludedOptions(){
   const box=document.getElementById("excludedSeatOptions");
-  box.innerHTML=SEATS.slice().sort((a,b)=>a-b).map(seat=>`<label><input type="checkbox" value="${seat}" ${excludedSeats.has(seat)?"checked":""} ${seat===FIXED_EMPTY_SEAT?"disabled":""}>${seat}번</label>`).join("");
+  box.innerHTML=SEATS.slice().sort((a,b)=>a-b).map(seat=>`<label><input type="checkbox" value="${seat}" ${excludedSeats.has(seat)?"checked":""}>${seat}번</label>`).join("");
   box.querySelectorAll("input").forEach(input=>input.onchange=()=>{
     const seat=Number(input.value);
     if(input.checked){
@@ -261,7 +266,6 @@ const GENERATION_ATTEMPTS=20000;
 
 
 /*
-  2번 좌석은 항상 빈자리입니다.
   관리자가 제외한 좌석도 비워둡니다.
   사용 가능한 좌석보다 학생이 적으면 추가 빈자리를 오른쪽부터 선정합니다.
 */
@@ -424,9 +428,6 @@ function generateAssignment(){
     shuffledSeats.forEach((seat,index)=>{
       candidate[seat]=shuffledStudents[index];
     });
-
-    // 안전장치: 2번에는 절대로 학생을 넣지 않습니다.
-    delete candidate[FIXED_EMPTY_SEAT];
 
     const evaluation=evaluateAssignment(candidate);
 
