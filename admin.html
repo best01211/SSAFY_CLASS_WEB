@@ -100,18 +100,17 @@
         </div>
 
         <div class="card">
-          <h2>밥 친구 신청 현황</h2>
+          <h2>밥친구 선택 현황</h2>
           <p class="muted">
-            밥 친구를 신청한 학생만 매칭합니다.
-            신청하지 않은 학생은 조에 포함되지 않습니다.
-            신청자는 3~4명 단위로 랜덤 매칭됩니다.
+            10층과 20층 선택자를 층별로 3~4명씩 편성합니다.
+            선택하지 않은 학생은 혼자 먹기로 분류됩니다.
           </p>
           <div class="actions">
-            <button id="loadChoicesButton">신청자 조회</button>
-            <button id="generateGroupsButton" class="success">신청자 조 생성</button>
+            <button id="loadChoicesButton">선택 현황 조회</button>
+            <button id="generateGroupsButton" class="success">오늘의 밥친구 생성</button>
           </div>
           <div id="choicesList">조회 전입니다.</div>
-          <div id="groupStatus" class="status">신청자가 3~4명 단위로 구성될 때 조를 생성할 수 있습니다.</div>
+          <div id="groupStatus" class="status">각 층의 선택자가 모두 3~4명 조로 나뉠 때 생성됩니다.</div>
         </div>
       </div>
     </section>
@@ -692,15 +691,14 @@ document.getElementById("loadChoicesButton").onclick=async()=>{
   const date=document.getElementById("menuDate").value;
 
   try{
-    const data=await adminRequest("list_group_applications",{date});
-    const applicants=data.applications || [];
-
-    box.innerHTML=applicants.length
-      ? `
-        <p><b>${date} 신청자 ${applicants.length}명</b></p>
-        ${applicants.map((item,index)=>`${index+1}. ${escapeHtml(item.student_name)}`).join("<br>")}
-      `
-      : `<p class="muted">${date} 밥 친구 신청자가 없습니다.</p>`;
+    const data=await adminRequest("list_choices",{date});
+    const choices=data.choices || [];
+    const labels={10:"10층",20:"20층"};
+    box.innerHTML=[10,20,"solo"].map(floor=>{
+      const members=choices.filter(item=>floor==="solo" ? item.floor==null : item.floor===floor);
+      const label=floor==="solo" ? "혼자 먹기 (미선택 포함)" : labels[floor];
+      return `<div class="box" style="margin-top:10px"><b>${label} · ${members.length}명</b><p>${members.length ? members.map(item=>escapeHtml(item.student_name)).join(", ") : "없음"}</p></div>`;
+    }).join("");
   }catch(error){
     box.textContent=error.message;
   }
@@ -711,13 +709,13 @@ document.getElementById("generateGroupsButton").onclick=async()=>{
   const date=document.getElementById("menuDate").value;
 
   status.className="status";
-  status.textContent="신청자끼리 조를 생성하는 중입니다.";
+  status.textContent="10층·20층 선택자를 층별로 편성하는 중입니다.";
 
   try{
     const data=await adminRequest("generate_groups",{date});
     status.className="status ok";
     status.textContent=
-      `${date} 신청자 ${data.applicantCount}명을 ${data.groupCount}개 조로 생성했습니다.`;
+      `${date} 선택자 ${data.applicantCount}명을 ${data.groupCount}개 조로 생성했습니다.`;
     document.getElementById("loadChoicesButton").click();
   }catch(error){
     status.className="status warn";
