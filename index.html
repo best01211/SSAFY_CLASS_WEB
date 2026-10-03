@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>우리반 자리·점심</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261003-meal-friends">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
 </head>
@@ -85,6 +85,10 @@
         <p id="friendDeadline" class="muted"></p>
       </div>
       <div class="card">
+        <h2>오늘 신청 목록</h2>
+        <div id="friendApplications"></div>
+      </div>
+      <div class="card">
         <h2>오늘 밥 친구 조</h2>
         <div id="friendGroups" class="groups"></div>
       </div>
@@ -103,6 +107,7 @@ const statusBox=document.getElementById("status");
 const menusBox=document.getElementById("menus");
 const seatDateBox=document.getElementById("seatDate");
 const friendGroupsBox=document.getElementById("friendGroups");
+const friendApplicationsBox=document.getElementById("friendApplications");
 const friendDeadlineBox=document.getElementById("friendDeadline");
 const studentNameInput=document.getElementById("friendStudentName");
 const friendChoiceSelect=document.getElementById("friendChoice");
@@ -274,6 +279,7 @@ async function loadMealData(tryAutoFetch=false){
 
 async function loadMealFriendData(){
   friendGroupsBox.innerHTML='<p class="muted">오늘의 조를 불러오는 중입니다.</p>';
+  friendApplicationsBox.innerHTML='<p class="muted">신청 목록을 불러오는 중입니다.</p>';
   const isOpen=kstHour()<11;
   saveFriendChoiceButton.disabled=!isOpen;
   friendDeadlineBox.textContent=isOpen
@@ -285,18 +291,31 @@ async function loadMealFriendData(){
     const data=await response.json();
     if(!response.ok || !data.ok) throw new Error(data.message || `HTTP ${response.status}`);
 
-    friendGroupsBox.innerHTML=data.groups.length
-      ? data.groups.map(group=>`
-          <div class="box meal-group-card">
-            <b>${group.floor}층 · ${group.floorGroupNo}조</b>
-            <div class="group-members">
-              ${group.members.map(member=>`<div class="group-member">${escapeHtml(member)}</div>`).join("")}
-            </div>
-          </div>
-        `).join("")
-      : isOpen
-        ? '<p class="muted">오전 11시 이후 오늘의 밥친구 조가 공개됩니다.</p>'
-        : '<div class="status warn">오늘의 밥친구 생성 실패</div>';
+    friendApplicationsBox.innerHTML=[10,20,null].map(floor=>{
+      const applicants=data.applications.filter(item=>item.floor===floor);
+      const label=floor==null ? "혼자 먹기 / 미신청" : `${floor}층`;
+      return `<div class="box" style="margin-bottom:10px">
+        <b>${label} · ${applicants.length}명</b>
+        <p>${applicants.length ? applicants.map(item=>escapeHtml(item.studentName)).join(", ") : "신청자 없음"}</p>
+      </div>`;
+    }).join("");
+
+    friendGroupsBox.innerHTML=data.floorStatuses.map(status=>{
+      const floorGroups=data.groups.filter(group=>group.floor===status.floor);
+      if(floorGroups.length){
+        return `<section class="floor-group-section">
+          <h3>${status.floor}층</h3>
+          ${floorGroups.map(group=>`
+            <div class="box meal-group-card">
+              <b>${group.floorGroupNo}조</b>
+              <div class="group-members">${group.members.map(member=>`<div class="group-member">${escapeHtml(member)}</div>`).join("")}</div>
+            </div>`).join("")}
+        </section>`;
+      }
+      return isOpen
+        ? `<div class="box"><b>${status.floor}층</b><p class="muted">신청 ${status.applicantCount}명 · 조 생성 대기 중</p></div>`
+        : `<div class="status warn">${status.floor}층 오늘의 밥친구 생성 실패 (${status.applicantCount}명)</div>`;
+    }).join("");
   }catch(error){
     friendGroupsBox.innerHTML=`<div class="status warn">${escapeHtml(error.message)}</div>`;
   }
@@ -364,6 +383,7 @@ saveFriendChoiceButton.addEventListener("click",async()=>{
     if(!response.ok || !data.ok) throw new Error(data.message || `HTTP ${response.status}`);
     friendChoiceStatusBox.className="status ok";
     friendChoiceStatusBox.textContent=`${inputName}: ${data.choiceLabel} 선택을 저장했습니다.`;
+    await loadMealFriendData();
   }catch(error){
     friendChoiceStatusBox.className="status warn";
     friendChoiceStatusBox.textContent=error.message;

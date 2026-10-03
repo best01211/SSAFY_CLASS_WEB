@@ -17,18 +17,25 @@ function kstNow() {
 
 export default async function handler(request, response) {
   try {
+    response.setHeader("Cache-Control", "no-store");
     const sb = getClient();
     const { date, hour } = kstNow();
 
     if (request.method === "GET") {
-      const [{ data: groups, error: groupError }, { data: choices, error: choiceError }] =
+      const [
+        { data: groups, error: groupError },
+        { data: choices, error: choiceError },
+        { data: students, error: studentError },
+      ] =
         await Promise.all([
           sb.from("meal_groups").select("*").eq("group_date", date).order("group_no"),
           sb.from("meal_choices").select("student_name,floor").eq("choice_date", date),
+          sb.from("students").select("name").eq("is_active", true).order("name"),
         ]);
 
       if (groupError) throw groupError;
       if (choiceError) throw choiceError;
+      if (studentError) throw studentError;
 
       const floorByStudent = new Map(
         (choices ?? []).map(item => [item.student_name, item.floor])
@@ -46,6 +53,20 @@ export default async function handler(request, response) {
         ok: true,
         isOpen: hour < 11,
         groups: resolvedGroups,
+        applications: (students ?? []).map(student => ({
+          studentName: student.name,
+          floor: floorByStudent.get(student.name) ?? null,
+        })),
+        floorStatuses: [10, 20].map(floor => {
+          const applicantCount = (choices ?? []).filter(item => item.floor === floor).length;
+          const groupCount = resolvedGroups.filter(group => group.floor === floor).length;
+          return {
+            floor,
+            applicantCount,
+            groupCount,
+            success: groupCount > 0,
+          };
+        }),
       });
     }
 

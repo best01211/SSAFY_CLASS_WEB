@@ -31,10 +31,6 @@ export async function generateMealGroups(sb, groupDate) {
 
   const byFloor = new Map([[10, []], [20, []]]);
   (choices ?? []).forEach(choice => byFloor.get(choice.floor)?.push(choice.student_name));
-  const invalid = [10, 20].filter(floor => {
-    const count = byFloor.get(floor).length;
-    return count > 0 && !groupSizes(count);
-  });
 
   const { error: deleteError } = await sb
     .from("meal_groups")
@@ -42,18 +38,23 @@ export async function generateMealGroups(sb, groupDate) {
     .eq("group_date", groupDate);
   if (deleteError) throw deleteError;
 
-  if (invalid.length || !(choices ?? []).length) {
-    const detail = invalid.length
-      ? ` (${invalid.map(floor => `${floor}층 ${byFloor.get(floor).length}명`).join(", ")})`
-      : "";
-    return { ok: false, message: `오늘의 밥친구 생성 실패${detail}`, applicantCount: choices?.length ?? 0 };
-  }
-
   const rows = [];
   const groups = [];
+  const floorResults = [];
   [10, 20].forEach(floor => {
     const names = shuffle(byFloor.get(floor));
-    const sizes = groupSizes(names.length) ?? [];
+    const sizes = names.length ? groupSizes(names.length) : null;
+    if (!sizes) {
+      floorResults.push({
+        floor,
+        success: false,
+        applicantCount: names.length,
+        groupCount: 0,
+        message: `${floor}층 밥친구 생성 실패 (${names.length}명)`,
+      });
+      return;
+    }
+
     let offset = 0;
     sizes.forEach((size, floorIndex) => {
       const members = names.slice(offset, offset + size);
@@ -61,9 +62,26 @@ export async function generateMealGroups(sb, groupDate) {
       groups.push({ floor, floorGroupNo: floorIndex + 1, members });
       offset += size;
     });
+    floorResults.push({
+      floor,
+      success: true,
+      applicantCount: names.length,
+      groupCount: sizes.length,
+      message: `${floor}층 ${sizes.length}개 조 생성 완료`,
+    });
   });
 
-  const { error: insertError } = await sb.from("meal_groups").insert(rows);
-  if (insertError) throw insertError;
-  return { ok: true, applicantCount: choices.length, groupCount: rows.length, groups };
+  if (rows.length) {
+    const { error: insertError } = await sb.from("meal_groups").insert(rows);
+    if (insertError) throw insertError;
+  }
+
+  return {
+    ok: rows.length > 0,
+    message: floorResults.map(result => result.message).join(" · "),
+    applicantCount: choices?.length ?? 0,
+    groupCount: rows.length,
+    groups,
+    floorResults,
+  };
 }

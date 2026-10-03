@@ -192,6 +192,35 @@ export default async function handler(request, response) {
       });
     }
 
+    if (body.action === "set_meal_choice") {
+      const choiceDate = String(body.date ?? "").trim();
+      const studentName = String(body.studentName ?? "").trim();
+      const floor = Number(body.floor);
+      if (!choiceDate || !studentName || ![10, 20].includes(floor)) {
+        return response.status(400).json({ ok: false, message: "날짜, 학생, 층을 확인해주세요." });
+      }
+
+      const { data: student, error: studentError } = await sb
+        .from("students")
+        .select("name")
+        .eq("name", studentName)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (studentError) throw studentError;
+      if (!student) {
+        return response.status(400).json({ ok: false, message: "등록된 활성 학생이 아닙니다." });
+      }
+
+      const { error } = await sb.from("meal_choices").upsert({
+        choice_date: choiceDate,
+        student_name: studentName,
+        floor,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "choice_date,student_name" });
+      if (error) throw error;
+      return response.status(200).json({ ok: true });
+    }
+
     if (body.action === "save_menu") {
       const { error } = await sb
         .from("daily_menus")

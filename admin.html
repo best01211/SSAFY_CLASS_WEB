@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>관리자 | 우리반 자리·점심</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261003-meal-friends">
   <script src="config.js"></script>
 </head>
 <body>
@@ -103,14 +103,14 @@
           <h2>밥친구 선택 현황</h2>
           <p class="muted">
             10층과 20층 선택자를 층별로 3~4명씩 편성합니다.
-            선택하지 않은 학생은 혼자 먹기로 분류됩니다.
+            선택하지 않은 학생은 혼자 먹기로 분류되며, 관리자가 층을 직접 지정할 수 있습니다.
           </p>
           <div class="actions">
             <button id="loadChoicesButton">선택 현황 조회</button>
             <button id="generateGroupsButton" class="success">오늘의 밥친구 생성</button>
           </div>
           <div id="choicesList">조회 전입니다.</div>
-          <div id="groupStatus" class="status">각 층의 선택자가 모두 3~4명 조로 나뉠 때 생성됩니다.</div>
+          <div id="groupStatus" class="status">10층과 20층 조는 서로 독립적으로 생성됩니다.</div>
         </div>
       </div>
     </section>
@@ -694,11 +694,44 @@ document.getElementById("loadChoicesButton").onclick=async()=>{
     const data=await adminRequest("list_choices",{date});
     const choices=data.choices || [];
     const labels={10:"10층",20:"20층"};
-    box.innerHTML=[10,20,"solo"].map(floor=>{
+    const summaries=[10,20,"solo"].map(floor=>{
       const members=choices.filter(item=>floor==="solo" ? item.floor==null : item.floor===floor);
       const label=floor==="solo" ? "혼자 먹기 (미선택 포함)" : labels[floor];
       return `<div class="box" style="margin-top:10px"><b>${label} · ${members.length}명</b><p>${members.length ? members.map(item=>escapeHtml(item.student_name)).join(", ") : "없음"}</p></div>`;
     }).join("");
+    const unassigned=choices.filter(item=>item.floor==null);
+    const assignmentRows=unassigned.length
+      ? unassigned.map((item,index)=>`
+          <div class="admin-choice-row">
+            <span>${escapeHtml(item.student_name)}</span>
+            <select aria-label="${escapeHtml(item.student_name)} 층 선택">
+              <option value="10">10층</option>
+              <option value="20">20층</option>
+            </select>
+            <button type="button" class="assign-choice" data-name="${escapeHtml(item.student_name)}">할당</button>
+          </div>`).join("")
+      : '<p class="muted">미신청 학생이 없습니다.</p>';
+    box.innerHTML=`${summaries}<div class="box" style="margin-top:10px"><b>미신청 학생 관리자 할당</b>${assignmentRows}</div>`;
+    box.querySelectorAll(".assign-choice").forEach(button=>{
+      button.onclick=async()=>{
+        const select=button.parentElement.querySelector("select");
+        button.disabled=true;
+        try{
+          await adminRequest("set_meal_choice",{
+            date,
+            studentName:button.dataset.name,
+            floor:Number(select.value)
+          });
+          document.getElementById("groupStatus").className="status ok";
+          document.getElementById("groupStatus").textContent=`${button.dataset.name} 학생을 ${select.value}층에 할당했습니다.`;
+          document.getElementById("loadChoicesButton").click();
+        }catch(error){
+          document.getElementById("groupStatus").className="status warn";
+          document.getElementById("groupStatus").textContent=error.message;
+          button.disabled=false;
+        }
+      };
+    });
   }catch(error){
     box.textContent=error.message;
   }
@@ -714,8 +747,7 @@ document.getElementById("generateGroupsButton").onclick=async()=>{
   try{
     const data=await adminRequest("generate_groups",{date});
     status.className="status ok";
-    status.textContent=
-      `${date} 선택자 ${data.applicantCount}명을 ${data.groupCount}개 조로 생성했습니다.`;
+    status.textContent=data.floorResults.map(result=>result.message).join(" · ");
     document.getElementById("loadChoicesButton").click();
   }catch(error){
     status.className="status warn";
