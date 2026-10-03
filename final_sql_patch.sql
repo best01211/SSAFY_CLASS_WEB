@@ -1,9 +1,16 @@
 
 -- 현재 프로젝트에서 추가 실행할 SQL입니다.
 
--- 공개 학생 화면이 사용하는 함수 권한
+-- 공개 학생 화면은 자리표 조회 함수만 사용합니다.
 grant execute on function public.get_active_seating() to anon, authenticated;
-grant execute on function public.submit_meal_choice(text, integer) to anon, authenticated;
+-- 식사 선택 변경은 서버 API만 수행합니다.
+do $$
+begin
+  if to_regprocedure('public.submit_meal_choice(text,integer)') is not null then
+    execute 'revoke all on function public.submit_meal_choice(text, integer) from public, anon, authenticated';
+  end if;
+end;
+$$;
 
 -- 공개 읽기 정책 재확인
 drop policy if exists "public read seating" on public.seating_schedules;

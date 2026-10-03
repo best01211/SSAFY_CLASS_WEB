@@ -177,7 +177,7 @@ function showPanel(id){
   document.getElementById("friendTab").classList.toggle("primary",id==="friend");
 
   if(id==="meal"){
-    loadMealData(true);
+    loadMealData();
   }
   if(id==="friend") loadMealFriendData();
 }
@@ -230,29 +230,6 @@ function renderMenus(menu){
     </div>
   `;
 }
-async function requestWelplanMenu(){
-  const response=await fetch(
-    `/api/fetch-welplan-menu?date=${compactDate()}`,
-    { cache:"no-store" }
-  );
-
-  let body=null;
-  try{
-    body=await response.json();
-  }catch{
-    // JSON이 아닌 응답은 아래 오류로 처리
-  }
-
-  if(!response.ok || body?.ok===false){
-    throw new Error(
-      body?.message ||
-      `메뉴 자동 수집 실패: HTTP ${response.status}`
-    );
-  }
-
-  return body;
-}
-
 async function fetchTodayMenuFromDatabase(){
   const {data,error}=await sb
     .from("daily_menus")
@@ -264,35 +241,11 @@ async function fetchTodayMenuFromDatabase(){
   return data;
 }
 
-async function loadMealData(tryAutoFetch=false){
+async function loadMealData(){
   menusBox.innerHTML='<p class="muted">오늘 메뉴를 불러오는 중입니다.</p>';
 
   try{
-    let menu=await fetchTodayMenuFromDatabase();
-
-    /*
-      Supabase에 오늘 20층 메뉴가 없으면 Netlify Function을 즉시 호출합니다.
-      따라서 정기 수집 시간이 지나지 않았거나 예약 함수가 실패했어도
-      학생이 "오늘 점심" 창에 들어오면 한 번 더 수집을 시도합니다.
-    */
-    if(tryAutoFetch && (!menu?.menu_10 || !menu?.menu_20)){
-      menusBox.innerHTML=`
-        <p class="muted inline-loading">
-          GitHub에서 10층·20층 메뉴를 가져오는 중입니다.
-        </p>
-      `;
-
-      try{
-        await requestWelplanMenu();
-        menu=await fetchTodayMenuFromDatabase();
-      }catch(fetchError){
-        console.error(fetchError);
-
-        if(menu){
-          menu.menu_20_fetch_error=fetchError.message;
-        }
-      }
-    }
+    const menu=await fetchTodayMenuFromDatabase();
 
     renderMenus(menu);
 
@@ -331,10 +284,10 @@ async function loadMealFriendData(){
     const data=await response.json();
     if(!response.ok || !data.ok) throw new Error(data.message || `HTTP ${response.status}`);
 
-    friendApplicationsBox.innerHTML=[10,20,null].map(floor=>{
+    friendApplicationsBox.innerHTML=[10,20,0,null].map(floor=>{
       const applicants=data.applications.filter(item=>item.floor===floor);
-      const label=floor==null ? "혼자 먹기 / 미신청" : `${floor}층`;
-      const floorClass=floor==null ? "solo" : `floor-${floor}`;
+      const label=floor==null ? (isOpen ? "미신청" : "자동 혼자 먹기") : floor===0 ? "혼자 먹기" : `${floor}층`;
+      const floorClass=floor==null ? "unsubmitted" : floor===0 ? "solo" : `floor-${floor}`;
       return `<div class="application-card ${floorClass}">
         <div class="application-card-head"><b>${label}</b><span>${applicants.length}명</span></div>
         <div class="name-chips">${applicants.length ? applicants.map(item=>`<span>${escapeHtml(item.studentName)}</span>`).join("") : '<span class="empty-chip">신청자 없음</span>'}</div>
@@ -377,7 +330,7 @@ async function loadPage(){
       seatDateBox.textContent=data[0].effective_date;
     }
 
-    await Promise.all([loadMealData(false),loadMealFriendData()]);
+    await Promise.all([loadMealData(),loadMealFriendData()]);
 
     statusBox.className="status ok";
     statusBox.textContent="최신 정보를 불러왔습니다.";

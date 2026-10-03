@@ -1,9 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
 import { generateMealGroups, koreanDate } from "./_meal-groups.js";
+import { isCronRequest } from "./_auth.js";
 
 export default async function handler(request, response) {
+  response.setHeader("Cache-Control", "no-store");
   if (request.method !== "GET") {
     return response.status(405).json({ ok: false, message: "GET 요청만 허용됩니다." });
+  }
+
+  if (!isCronRequest(request)) {
+    return response.status(401).json({ ok: false, message: "유효하지 않은 예약 요청입니다." });
   }
 
   try {

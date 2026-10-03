@@ -278,16 +278,11 @@ const GENERATION_ATTEMPTS=20000;
   사용 가능한 좌석보다 학생이 적으면 추가 빈자리를 오른쪽부터 선정합니다.
 */
 
-const credentials=()=>({
-  adminId:sessionStorage.getItem("adminId") || document.getElementById("adminId")?.value.trim(),
-  adminPassword:sessionStorage.getItem("adminPassword") || document.getElementById("adminPassword")?.value
-});
-
 async function adminRequest(action,payload={}){
   const response=await fetch("/api/admin",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({...credentials(),action,...payload})
+    body:JSON.stringify({action,...payload})
   });
   let data={};
   try{data=await response.json()}catch{}
@@ -645,13 +640,17 @@ async function showAdmin(){
 document.getElementById("loginButton").onclick=async()=>{
   const status=document.getElementById("loginStatus");
   try{
-    await adminRequest("login");
-    sessionStorage.setItem("adminId",document.getElementById("adminId").value.trim());
-    sessionStorage.setItem("adminPassword",document.getElementById("adminPassword").value);
+    await adminRequest("login",{
+      adminId:document.getElementById("adminId").value.trim(),
+      adminPassword:document.getElementById("adminPassword").value
+    });
+    document.getElementById("adminPassword").value="";
     await showAdmin();
   }catch(error){status.className="status warn";status.textContent=error.message}
 };
-document.getElementById("logoutButton").onclick=()=>{sessionStorage.clear();location.reload()};
+document.getElementById("logoutButton").onclick=async()=>{
+  try{await adminRequest("logout")}finally{location.reload()}
+};
 document.getElementById("seatMode").onchange=()=>{
   document.getElementById("seatStatus").className="status";
   document.getElementById("seatStatus").textContent=document.getElementById("seatMode").value==="manual"
@@ -703,10 +702,10 @@ document.getElementById("loadChoicesButton").onclick=async()=>{
     const data=await adminRequest("list_choices",{date});
     const choices=data.choices || [];
     const labels={10:"10층",20:"20층"};
-    const summaries=[10,20,"solo"].map(floor=>{
-      const members=choices.filter(item=>floor==="solo" ? item.floor==null : item.floor===floor);
-      const label=floor==="solo" ? "혼자 먹기 (미선택 포함)" : labels[floor];
-      const floorClass=floor==="solo" ? "solo" : `floor-${floor}`;
+    const summaries=[10,20,0,null].map(floor=>{
+      const members=choices.filter(item=>item.floor===floor);
+      const label=floor==null ? "미신청" : floor===0 ? "혼자 먹기" : labels[floor];
+      const floorClass=floor==null ? "unsubmitted" : floor===0 ? "solo" : `floor-${floor}`;
       return `<div class="choice-summary ${floorClass}"><b>${label} · ${members.length}명</b><p>${members.length ? members.map(item=>escapeHtml(item.student_name)).join(", ") : "없음"}</p></div>`;
     }).join("");
     const unassigned=choices.filter(item=>item.floor==null);
@@ -780,9 +779,7 @@ document.getElementById("seatAdminTab").onclick=()=>openAdminPanel("seat");
 document.getElementById("menuAdminTab").onclick=()=>openAdminPanel("menu");
 document.getElementById("studentAdminTab").onclick=()=>openAdminPanel("student");
 
-if(sessionStorage.getItem("adminId")&&sessionStorage.getItem("adminPassword")){
-  adminRequest("login").then(showAdmin).catch(()=>sessionStorage.clear());
-}
+adminRequest("session").then(showAdmin).catch(()=>{});
 </script>
 </body>
 </html>

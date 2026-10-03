@@ -40,14 +40,10 @@ export default async function handler(request, response) {
       const floorByStudent = new Map(
         (choices ?? []).map(item => [item.student_name, item.floor])
       );
-      const floorCounts = new Map();
       const resolvedGroups = (groups ?? []).map(group => {
         const members = Array.isArray(group.members) ? group.members : [];
-        const floor = floorByStudent.get(members[0]) ?? null;
-        const floorGroupNo = (floorCounts.get(floor) ?? 0) + 1;
-        floorCounts.set(floor, floorGroupNo);
-        return { floor, floorGroupNo, members };
-      });
+        return { floor: group.floor, floorGroupNo: group.floor_group_no, members };
+      }).filter(group => [10, 20].includes(group.floor));
 
       return response.status(200).json({
         ok: true,
@@ -96,11 +92,12 @@ export default async function handler(request, response) {
       }
 
       if (choice === "solo") {
-        const { error } = await sb
-          .from("meal_choices")
-          .delete()
-          .eq("choice_date", date)
-          .eq("student_name", studentName);
+        const { error } = await sb.from("meal_choices").upsert({
+          choice_date: date,
+          student_name: studentName,
+          floor: 0,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "choice_date,student_name" });
         if (error) throw error;
       } else {
         const { error } = await sb.from("meal_choices").upsert({

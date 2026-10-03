@@ -110,8 +110,8 @@ https://배포주소.vercel.app/admin.html
 로그인:
 
 ```text
-ID: admin
-PW: ssafy16
+ID: `ADMIN_ID` 환경 변수에 설정한 값
+PW: `ADMIN_PASSWORD` 환경 변수에 설정한 값
 ```
 
 ### 메뉴 API

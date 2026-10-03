@@ -1,9 +1,12 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { generateMealGroups } from "./_meal-groups.js";
-
-const ADMIN_ID = "admin";
-const ADMIN_PASSWORD = "ssafy16";
+import {
+  clearAdminSession,
+  isAdminRequest,
+  setAdminSession,
+  validateAdminCredentials,
+} from "./_auth.js";
 
 function getClient() {
   const url = process.env.SUPABASE_URL;
@@ -20,12 +23,8 @@ function getClient() {
   });
 }
 
-function validateCredentials(body) {
-  return body.adminId === ADMIN_ID &&
-    body.adminPassword === ADMIN_PASSWORD;
-}
-
 export default async function handler(request, response) {
+  response.setHeader("Cache-Control", "no-store");
   if (request.method !== "POST") {
     return response.status(405).json({
       ok: false,
@@ -36,14 +35,27 @@ export default async function handler(request, response) {
   try {
     const body = request.body ?? {};
 
-    if (!validateCredentials(body)) {
-      return response.status(401).json({
-        ok: false,
-        message: "관리자 아이디 또는 비밀번호가 올바르지 않습니다.",
-      });
+    if (body.action === "login") {
+      if (!validateAdminCredentials(body.adminId, body.adminPassword)) {
+        return response.status(401).json({
+          ok: false,
+          message: "관리자 아이디 또는 비밀번호가 올바르지 않습니다.",
+        });
+      }
+      setAdminSession(response);
+      return response.status(200).json({ ok: true });
     }
 
-    if (body.action === "login") {
+    if (!isAdminRequest(request)) {
+      return response.status(401).json({ ok: false, message: "관리자 로그인이 필요합니다." });
+    }
+
+    if (body.action === "session") {
+      return response.status(200).json({ ok: true });
+    }
+
+    if (body.action === "logout") {
+      clearAdminSession(response);
       return response.status(200).json({ ok: true });
     }
 
