@@ -4,23 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>우리반 자리·점심</title>
-  <link rel="stylesheet" href="styles.css?v=20261003-ui-v2">
+  <link rel="stylesheet" href="styles.css?v=20261003-ui-v4">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
 </head>
 <body>
 <header>
   <div class="wrap top">
-    <div>
+    <div class="brand-block">
+      <span class="brand-mark">16</span>
+      <div>
       <h1>우리반 자리·점심</h1>
       <p>오늘 자리표와 메뉴를 확인하고 오전 11시까지 밥친구를 선택하세요.</p>
+      </div>
     </div>
-    <a class="primary" href="admin.html">관리자</a>
+    <a class="header-link" href="admin.html">관리자</a>
   </div>
 </header>
 
 <main>
-  <div id="status" class="status">불러오는 중입니다.</div>
+  <div id="status" class="status app-status">불러오는 중입니다.</div>
 
   <div class="tabs">
     <button id="seatTab" class="primary" type="button">자리표</button>
@@ -29,9 +32,14 @@
   </div>
 
   <section id="seat" class="panel active">
-    <div class="card">
-      <h2>현재 자리표</h2>
-      <p class="muted">적용일: <span id="seatDate">-</span></p>
+    <div class="card page-card seat-page-card">
+      <div class="page-card-heading">
+        <div class="section-heading">
+          <span class="section-icon">▦</span>
+          <div><span class="eyebrow">CLASSROOM</span><h2>현재 자리표</h2></div>
+        </div>
+        <span class="meta-chip">적용일 <b id="seatDate">-</b></span>
+      </div>
 
       <div class="classroom">
         <div class="side left" id="leftSeats"></div>
@@ -42,8 +50,14 @@
   </section>
 
   <section id="meal" class="panel">
-      <div class="card">
-        <h2>오늘 메뉴</h2>
+      <div class="card page-card menu-page-card">
+        <div class="page-card-heading">
+          <div class="section-heading">
+            <span class="section-icon">🍽</span>
+            <div><span class="eyebrow">TODAY'S MENU</span><h2>오늘 점심 메뉴</h2></div>
+          </div>
+          <span class="meta-chip">10층 · 20층</span>
+        </div>
         <div id="menus" class="menu-grid">
           <p class="muted">메뉴를 불러오는 중입니다.</p>
         </div>
