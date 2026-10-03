@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>관리자 | 우리반 자리·점심</title>
-  <link rel="stylesheet" href="styles.css?v=20261003-meal-friends">
+  <link rel="stylesheet" href="styles.css?v=20261003-ui-v2">
   <script src="config.js"></script>
 </head>
 <body>
@@ -99,8 +99,11 @@
           <div id="menuStatus" class="status">필요할 때만 수동으로 입력하세요.</div>
         </div>
 
-        <div class="card">
-          <h2>밥친구 선택 현황</h2>
+        <div class="card meal-friend-admin-card">
+          <div class="section-heading">
+            <span class="section-icon">🍚</span>
+            <div><span class="eyebrow">MEAL FRIEND</span><h2>밥친구 선택 현황</h2></div>
+          </div>
           <p class="muted">
             10층과 20층 선택자를 층별로 3~4명씩 편성합니다.
             선택하지 않은 학생은 혼자 먹기로 분류되며, 관리자가 층을 직접 지정할 수 있습니다.
@@ -697,7 +700,8 @@ document.getElementById("loadChoicesButton").onclick=async()=>{
     const summaries=[10,20,"solo"].map(floor=>{
       const members=choices.filter(item=>floor==="solo" ? item.floor==null : item.floor===floor);
       const label=floor==="solo" ? "혼자 먹기 (미선택 포함)" : labels[floor];
-      return `<div class="box" style="margin-top:10px"><b>${label} · ${members.length}명</b><p>${members.length ? members.map(item=>escapeHtml(item.student_name)).join(", ") : "없음"}</p></div>`;
+      const floorClass=floor==="solo" ? "solo" : `floor-${floor}`;
+      return `<div class="choice-summary ${floorClass}"><b>${label} · ${members.length}명</b><p>${members.length ? members.map(item=>escapeHtml(item.student_name)).join(", ") : "없음"}</p></div>`;
     }).join("");
     const unassigned=choices.filter(item=>item.floor==null);
     const assignmentRows=unassigned.length
@@ -711,7 +715,7 @@ document.getElementById("loadChoicesButton").onclick=async()=>{
             <button type="button" class="assign-choice" data-name="${escapeHtml(item.student_name)}">할당</button>
           </div>`).join("")
       : '<p class="muted">미신청 학생이 없습니다.</p>';
-    box.innerHTML=`${summaries}<div class="box" style="margin-top:10px"><b>미신청 학생 관리자 할당</b>${assignmentRows}</div>`;
+    box.innerHTML=`<div class="choice-summary-grid">${summaries}</div><div class="admin-assignment-box"><div class="admin-assignment-title"><b>미신청 학생 관리자 할당</b><span>${unassigned.length}명</span></div>${assignmentRows}</div>`;
     box.querySelectorAll(".assign-choice").forEach(button=>{
       button.onclick=async()=>{
         const select=button.parentElement.querySelector("select");

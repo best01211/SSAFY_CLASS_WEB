@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>우리반 자리·점심</title>
-  <link rel="stylesheet" href="styles.css?v=20261003-meal-friends">
+  <link rel="stylesheet" href="styles.css?v=20261003-ui-v2">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
 </head>
@@ -50,13 +50,23 @@
       </div>
   </section>
 
-  <section id="friend" class="panel">
-    <div class="grid">
-      <div class="card">
-        <h2>오늘의 밥친구 선택</h2>
+  <section id="friend" class="panel friend-panel">
+    <div class="friend-intro">
+      <div>
+        <span class="eyebrow">LUNCH MATCH</span>
+        <h2>오늘 누구와 점심 먹을까요?</h2>
+        <p>원하는 식사 방법을 선택하면 같은 층을 고른 친구끼리 3~4명 조로 연결됩니다.</p>
+      </div>
+      <div class="deadline-chip">오전 11시 마감</div>
+    </div>
+    <div class="grid friend-layout">
+      <div class="card friend-choice-card">
+        <div class="section-heading">
+          <span class="section-icon">✓</span>
+          <div><span class="eyebrow">나의 선택</span><h2>밥친구 신청</h2></div>
+        </div>
         <p class="muted">
-          10층 또는 20층을 선택한 학생끼리 층별로 3~4명 조를 만듭니다.
-          오전 11시까지 선택하지 않으면 혼자 먹기로 분류됩니다.
+          오전 11시까지 자유롭게 변경할 수 있어요. 선택하지 않으면 혼자 먹기로 분류됩니다.
         </p>
 
         <label for="friendStudentName">이름</label>
@@ -68,15 +78,26 @@
           placeholder="이름을 입력하세요"
         >
 
-        <label for="friendChoice">식사 선택</label>
-        <select id="friendChoice">
-          <option value="solo">혼자 먹기</option>
-          <option value="10">10층 밥친구</option>
-          <option value="20">20층 밥친구</option>
-        </select>
+        <fieldset class="choice-fieldset">
+          <legend>식사 선택</legend>
+          <div class="choice-options">
+            <label class="choice-option solo-option">
+              <input type="radio" name="friendChoice" value="solo" checked>
+              <span><b>혼자 먹기</b><small>오늘은 편하게</small></span>
+            </label>
+            <label class="choice-option floor10-option">
+              <input type="radio" name="friendChoice" value="10">
+              <span><b>10층</b><small>10층 친구와 함께</small></span>
+            </label>
+            <label class="choice-option floor20-option">
+              <input type="radio" name="friendChoice" value="20">
+              <span><b>20층</b><small>20층 친구와 함께</small></span>
+            </label>
+          </div>
+        </fieldset>
 
-        <div class="actions" style="margin-top:12px;margin-bottom:12px">
-          <button id="saveFriendChoice" class="success" type="button">선택 저장</button>
+        <div class="actions friend-submit-actions">
+          <button id="saveFriendChoice" class="primary friend-submit" type="button">오늘의 선택 저장</button>
         </div>
 
         <div id="friendChoiceStatus" class="status">
@@ -84,12 +105,18 @@
         </div>
         <p id="friendDeadline" class="muted"></p>
       </div>
-      <div class="card">
-        <h2>오늘 신청 목록</h2>
+      <div class="card friend-applications-card">
+        <div class="section-heading">
+          <span class="section-icon">👥</span>
+          <div><span class="eyebrow">실시간 현황</span><h2>오늘 신청 목록</h2></div>
+        </div>
         <div id="friendApplications"></div>
       </div>
-      <div class="card">
-        <h2>오늘 밥 친구 조</h2>
+      <div class="card friend-groups-card">
+        <div class="section-heading">
+          <span class="section-icon">🍚</span>
+          <div><span class="eyebrow">TODAY'S TEAM</span><h2>오늘 밥친구 조</h2></div>
+        </div>
         <div id="friendGroups" class="groups"></div>
       </div>
     </div>
@@ -110,7 +137,6 @@ const friendGroupsBox=document.getElementById("friendGroups");
 const friendApplicationsBox=document.getElementById("friendApplications");
 const friendDeadlineBox=document.getElementById("friendDeadline");
 const studentNameInput=document.getElementById("friendStudentName");
-const friendChoiceSelect=document.getElementById("friendChoice");
 const saveFriendChoiceButton=document.getElementById("saveFriendChoice");
 const friendChoiceStatusBox=document.getElementById("friendChoiceStatus");
 let activeStudentNames=[];
@@ -294,17 +320,18 @@ async function loadMealFriendData(){
     friendApplicationsBox.innerHTML=[10,20,null].map(floor=>{
       const applicants=data.applications.filter(item=>item.floor===floor);
       const label=floor==null ? "혼자 먹기 / 미신청" : `${floor}층`;
-      return `<div class="box" style="margin-bottom:10px">
-        <b>${label} · ${applicants.length}명</b>
-        <p>${applicants.length ? applicants.map(item=>escapeHtml(item.studentName)).join(", ") : "신청자 없음"}</p>
+      const floorClass=floor==null ? "solo" : `floor-${floor}`;
+      return `<div class="application-card ${floorClass}">
+        <div class="application-card-head"><b>${label}</b><span>${applicants.length}명</span></div>
+        <div class="name-chips">${applicants.length ? applicants.map(item=>`<span>${escapeHtml(item.studentName)}</span>`).join("") : '<span class="empty-chip">신청자 없음</span>'}</div>
       </div>`;
     }).join("");
 
     friendGroupsBox.innerHTML=data.floorStatuses.map(status=>{
       const floorGroups=data.groups.filter(group=>group.floor===status.floor);
       if(floorGroups.length){
-        return `<section class="floor-group-section">
-          <h3>${status.floor}층</h3>
+        return `<section class="floor-group-section floor-${status.floor}">
+          <div class="floor-section-title"><h3>${status.floor}층</h3><span>${status.applicantCount}명 참여</span></div>
           ${floorGroups.map(group=>`
             <div class="box meal-group-card">
               <b>${group.floorGroupNo}조</b>
@@ -313,8 +340,8 @@ async function loadMealFriendData(){
         </section>`;
       }
       return isOpen
-        ? `<div class="box"><b>${status.floor}층</b><p class="muted">신청 ${status.applicantCount}명 · 조 생성 대기 중</p></div>`
-        : `<div class="status warn">${status.floor}층 오늘의 밥친구 생성 실패 (${status.applicantCount}명)</div>`;
+        ? `<div class="floor-waiting floor-${status.floor}"><b>${status.floor}층</b><span>신청 ${status.applicantCount}명 · 조 생성 대기 중</span></div>`
+        : `<div class="floor-waiting failed floor-${status.floor}"><b>${status.floor}층</b><span>오늘의 밥친구 생성 실패 · ${status.applicantCount}명</span></div>`;
     }).join("");
   }catch(error){
     friendGroupsBox.innerHTML=`<div class="status warn">${escapeHtml(error.message)}</div>`;
@@ -377,7 +404,7 @@ saveFriendChoiceButton.addEventListener("click",async()=>{
     const response=await fetch("/api/meal-friends",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({studentName:inputName,choice:friendChoiceSelect.value})
+      body:JSON.stringify({studentName:inputName,choice:document.querySelector('input[name="friendChoice"]:checked').value})
     });
     const data=await response.json();
     if(!response.ok || !data.ok) throw new Error(data.message || `HTTP ${response.status}`);
