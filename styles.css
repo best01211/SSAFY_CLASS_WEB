@@ -396,3 +396,26 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:#818cf8;box-shado
   .tabs{width:100%;min-width:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:hidden}
   .tabs button{min-width:0;padding:9px 4px;white-space:nowrap}
 }
+
+/* 조를 먼저 표시하고 층별 카드의 높이는 내용에 맞춥니다. */
+.friend-groups-card .groups{align-items:start}
+.floor-group-section{align-content:start;grid-auto-rows:max-content}
+.floor-section-title{align-items:center}
+.friend-panel .choice-options{grid-template-columns:repeat(2,minmax(0,1fr))}
+.friend-submit-actions{flex-direction:column}
+.choice-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+#adminApp>.tabs{width:100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.seat-status-list{display:grid;gap:8px;max-height:460px;overflow:auto}
+.seat-status-row{display:grid;grid-template-columns:140px minmax(120px,1fr) auto;gap:8px;align-items:center}
+.seat-status-row label{margin:0;display:flex;align-items:center;gap:6px;font-size:13px}
+.seat-status-row input[type=checkbox]{width:auto}
+.seat-fault{padding:4px;overflow-wrap:anywhere;text-align:center;font-weight:normal}
+.seat-report{border-bottom:1px solid #e2e8f0;padding:14px 0}
+.seat-report p{white-space:pre-wrap;overflow-wrap:anywhere}
+.seat-report small{display:block;color:#64748b;margin-bottom:8px}
+.seat-report-card form{max-width:650px}.seat-report-card button{margin:12px 0}
+@media(max-width:650px){
+  .seat-status-row{grid-template-columns:1fr auto}.seat-status-row .seat-reason{grid-column:1/-1;grid-row:2}
+  #adminApp>.tabs button{font-size:12px;white-space:normal}
+  .choice-summary-grid{grid-template-columns:1fr}
+}

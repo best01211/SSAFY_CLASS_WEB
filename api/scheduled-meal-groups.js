@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { generateMealGroups, koreanDate } from "./_meal-groups.js";
 import { isCronRequest } from "./_auth.js";
+import { errorMessage } from "./_errors.js";
 
 export default async function handler(request, response) {
   response.setHeader("Cache-Control", "no-store");
@@ -17,13 +17,14 @@ export default async function handler(request, response) {
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) throw new Error("Supabase 환경 변수가 없습니다.");
     const sb = createClient(url, key, { auth: { persistSession: false } });
-    const result = await generateMealGroups(sb, koreanDate());
-    return response.status(200).json(result);
+    const { data, error } = await sb.rpc("generate_due_meal_groups");
+    if (error) throw error;
+    return response.status(200).json({ ok: true, result: data });
   } catch (error) {
     console.error(error);
     return response.status(500).json({
       ok: false,
-      message: error instanceof Error ? error.message : String(error),
+      message: errorMessage(error),
     });
   }
 }

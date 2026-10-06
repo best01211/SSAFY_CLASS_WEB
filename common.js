@@ -3,11 +3,11 @@ const STUDENTS=["윤승환","박태준","김호영","강현규","최민재","이
 
 /*
   왼쪽 영역:
-  2번은 왼쪽 책상 영역의 "우측 열"에 배치합니다.
+  첫 번째 줄에는 1번과 2번을 함께 배치합니다.
   마지막 줄에는 26번과 27번을 함께 표시합니다.
 */
 const LEFT=[
-  { seats:[2], align:"right" },
+  { seats:[1,2] },
   { seats:[6,7] },
   { seats:[11,12] },
   { seats:[16,17] },
@@ -30,6 +30,7 @@ const ROWS=[
 ];
 
 const SEATS=ROWS.flat();
+let seatStatuses=[];
 
 function createSeat(number, className, assignment){
   const student=assignment?.[number];
@@ -37,6 +38,15 @@ function createSeat(number, className, assignment){
   element.className=`seat ${className} ${student ? "" : "empty"}`;
   element.dataset.seat=number;
   element.innerHTML=`<small>${number}번</small><span>${escapeHtml(student || "빈자리")}</span>`;
+  const state=seatStatuses.find(item=>item.seat_number===number);
+  if(state?.is_unavailable){
+    element.classList.add("excluded-seat");
+    const badge=document.createElement("small");
+    badge.className="seat-fault";
+    badge.textContent=`사용 불가 · ${state.reason}`;
+    element.appendChild(badge);
+    element.title=state.reason;
+  }
   return element;
 }
 
@@ -97,12 +107,25 @@ function compactDate(dateText=today()){
   return dateText.replaceAll("-","");
 }
 
+function seatingPublicationDate(effectiveDate){
+  const date=new Date(`${effectiveDate}T00:00:00Z`);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate) ||
+    !Number.isFinite(date.getTime()) || date.toISOString().slice(0,10)!==effectiveDate) return "";
+  date.setUTCDate(date.getUTCDate()-7);
+  return date.toISOString().slice(0,10);
+}
+
 function kstHour(){
   return Number(new Intl.DateTimeFormat("en-US",{
     timeZone:"Asia/Seoul",
     hour:"2-digit",
     hour12:false
   }).format(new Date()));
+}
+
+function kstMinutes(){
+  const value=new Date(Date.now()+9*60*60*1000);
+  return value.getUTCHours()*60+value.getUTCMinutes();
 }
 
 function escapeHtml(value){

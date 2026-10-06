@@ -1,6 +1,9 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { generateMealGroups } from "./_meal-groups.js";
+import { errorMessage } from "./_errors.js";
+import { getClassSettings, validDeadline } from "./_class-settings.js";
+import { SEAT_NUMBERS, validateAssignment } from "../shared/classroom.js";
 import {
   clearAdminSession,
   isAdminRequest,
@@ -61,6 +64,40 @@ export default async function handler(request, response) {
 
     const sb = getClient();
 
+    if (body.action === "get_class_settings") {
+      return response.status(200).json({ ok: true, settings: await getClassSettings(sb) });
+    }
+    if (body.action === "save_meal_deadline") {
+      if (!validDeadline(body.deadline)) return response.status(400).json({ ok: false, message: "마감 시간을 시:분 형식으로 선택해주세요." });
+      const { error } = await sb.rpc("set_meal_deadline", { p_deadline: body.deadline });
+      if (error) throw error;
+      return response.status(200).json({ ok: true });
+    }
+    if (body.action === "list_seat_statuses") {
+      const { data, error } = await sb.from("seat_statuses").select("*").order("seat_number");
+      if (error) throw error;
+      return response.status(200).json({ ok: true, seats: data ?? [] });
+    }
+    if (body.action === "set_seat_status") {
+      const seatNumber = Number(body.seatNumber);
+      const reason = String(body.reason ?? "").trim();
+      if (!SEAT_NUMBERS.includes(seatNumber) || typeof body.isUnavailable !== "boolean" || reason.length > 300 || (body.isUnavailable && !reason)) return response.status(400).json({ ok: false, message: "자리 번호와 사용 불가 사유(300자 이하)를 확인해주세요." });
+      const { error } = await sb.from("seat_statuses").upsert({ seat_number: seatNumber, is_unavailable: body.isUnavailable, reason: body.isUnavailable ? reason : "", updated_at: new Date().toISOString() }, { onConflict: "seat_number" });
+      if (error) throw error;
+      return response.status(200).json({ ok: true });
+    }
+    if (body.action === "list_seat_reports") {
+      const { data, error } = await sb.from("seat_reports").select("*").order("created_at", { ascending: false }).limit(200);
+      if (error) throw error;
+      return response.status(200).json({ ok: true, reports: data ?? [] });
+    }
+    if (body.action === "resolve_seat_report") {
+      if (!Number.isSafeInteger(Number(body.id)) || Number(body.id) < 1) return response.status(400).json({ ok: false, message: "신고 번호를 확인해주세요." });
+      const { error } = await sb.from("seat_reports").update({ status: "resolved", resolved_at: new Date().toISOString() }).eq("id", Number(body.id));
+      if (error) throw error;
+      return response.status(200).json({ ok: true });
+    }
+
     if (body.action === "list_schedules") {
       const { data, error } = await sb
         .from("seating_schedules")
@@ -82,10 +119,28 @@ export default async function handler(request, response) {
         });
       }
 
+      const effectiveDate = String(body.effectiveDate);
+      const parsedDate = new Date(`${effectiveDate}T00:00:00Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate) ||
+        !Number.isFinite(parsedDate.getTime()) ||
+        parsedDate.toISOString().slice(0, 10) !== effectiveDate) {
+        return response.status(400).json({
+          ok: false,
+          message: "유효한 자리 적용 날짜를 선택해주세요.",
+        });
+      }
+
+      const [studentsResult, statusesResult] = await Promise.all([
+        sb.from("students").select("name").eq("is_active", true),
+        sb.from("seat_statuses").select("seat_number,is_unavailable"),
+      ]);
+      for (const result of [studentsResult, statusesResult]) if (result.error) throw result.error;
+      const assignmentProblem = validateAssignment(body.assignment, (studentsResult.data ?? []).map(item => item.name), statusesResult.data ?? []);
+      if (assignmentProblem) return response.status(400).json({ ok: false, message: assignmentProblem });
       const { error } = await sb
         .from("seating_schedules")
         .upsert({
-          effective_date: body.effectiveDate,
+          effective_date: effectiveDate,
           assignment: body.assignment,
         }, { onConflict: "effective_date" });
 
@@ -194,13 +249,16 @@ export default async function handler(request, response) {
 
       const resolved = (students ?? []).map(student => ({
         student_name: student.name,
-        floor: choiceMap.get(student.name) ?? null,
+        floor: [10, 20].includes(choiceMap.get(student.name)) ? choiceMap.get(student.name) : null,
         is_default: !choiceMap.has(student.name),
       }));
 
+      const { data: groups, error: groupError } = await sb.from("meal_groups").select("floor,floor_group_no,members").eq("group_date", body.date).order("group_no");
+      if (groupError) throw groupError;
       return response.status(200).json({
         ok: true,
         choices: resolved,
+        groups: groups ?? [],
       });
     }
 
@@ -269,7 +327,7 @@ export default async function handler(request, response) {
     console.error(error);
     return response.status(500).json({
       ok: false,
-      message: error instanceof Error ? error.message : String(error),
+      message: errorMessage(error),
     });
   }
 }

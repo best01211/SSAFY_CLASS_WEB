@@ -30,11 +30,12 @@ create or replace function public.get_active_seating()
 returns table(effective_date date,assignment jsonb)
 language sql security definer set search_path=public
 as $$select effective_date,assignment from public.seating_schedules
-where effective_date <= (now() at time zone 'Asia/Seoul')::date
+where effective_date <= (now() at time zone 'Asia/Seoul')::date + 7
 order by effective_date desc limit 1$$;
 grant execute on function public.get_active_seating() to anon,authenticated;
 drop policy if exists "public read seating" on public.seating_schedules;
-create policy "public read seating" on public.seating_schedules for select to anon,authenticated using(true);
+create policy "public read seating" on public.seating_schedules for select to anon,authenticated
+using(effective_date <= (now() at time zone 'Asia/Seoul')::date + 7);
 drop policy if exists "public read menus" on public.daily_menus;
 create policy "public read menus" on public.daily_menus for select to anon,authenticated using(true);
 drop policy if exists "public read groups" on public.meal_groups;

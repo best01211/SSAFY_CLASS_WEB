@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>관리자 | 우리반 자리·점심</title>
-  <link rel="stylesheet" href="styles.css?v=20261003-ui-v4">
+  <link rel="stylesheet" href="styles.css?v=20261006-class-management">
   <script src="config.js"></script>
 </head>
 <body>
@@ -42,6 +42,7 @@
     <div class="tabs">
       <button class="primary" id="seatAdminTab">자리 배치</button>
       <button id="menuAdminTab">점심 관리</button>
+      <button id="friendAdminTab">밥친구 관리</button>
       <button id="studentAdminTab">학생 관리</button>
     </div>
 
@@ -49,9 +50,10 @@
       <div class="grid">
         <div class="card seat-editor-card">
           <div class="section-heading"><span class="section-icon">▦</span><div><span class="eyebrow">SEATING</span><h2>자리 배치 예약</h2></div></div>
-          <p class="muted">최근 5회 기록을 참고해 같은 자리 반복을 최대한 피합니다.</p>
+          <p class="muted">사용 가능한 좌석과 학생을 각각 무작위로 섞어 배치합니다. 1번 좌석도 사용할 수 있습니다.</p>
           <label for="effectiveDate">적용 날짜</label>
           <input id="effectiveDate" type="date">
+          <p id="seatPublicationHint" class="muted">적용일 7일 전부터 공개되며, 다음 자리표 공개일까지 표시됩니다.</p>
           <label for="seatMode">배치 모드</label>
           <select id="seatMode">
             <option value="auto">자동 배치</option>
@@ -59,9 +61,10 @@
           </select>
           <p class="muted">직접 배치에서는 자리별로 학생을 선택하세요. 이미 배치된 학생을 선택하면 두 학생의 자리를 바꿉니다.</p>
           <details>
-            <summary>배정하지 않을 자리 설정</summary>
-            <p class="muted">선택한 자리는 항상 비워둡니다. 설정은 이 브라우저에 저장됩니다.</p>
-            <div id="excludedSeatOptions" class="excluded-seat-options"></div>
+            <summary>좌석 상태 및 사용 불가 사유 관리</summary>
+            <p class="muted">사용 불가 좌석은 추첨에서 제외됩니다. 사유는 학생 자리표에도 표시됩니다.</p>
+            <div id="excludedSeatOptions" class="seat-status-list"></div>
+            <div id="seatStateStatus" class="status" aria-live="polite"></div>
           </details>
           <div class="actions">
             <button id="generateSeatButton" class="primary">자리 생성</button>
@@ -77,10 +80,11 @@
         </div>
         <div class="card schedule-list-card">
           <div class="section-heading"><span class="section-icon">◷</span><div><span class="eyebrow">SCHEDULE</span><h2>예약 목록</h2></div></div>
-          <p class="muted">보기로 자리표를 확인하고, 필요 없는 예약은 삭제할 수 있습니다.</p>
+          <p class="muted">적용일 7일 전부터 새 자리표가 공개됩니다. 다음 자리표 공개 전까지 기존 자리표가 표시됩니다. 같은 적용일로 저장하면 기존 예약이 수정됩니다.</p>
           <div id="scheduleList">불러오는 중입니다.</div>
         </div>
       </div>
+      <div class="card"><h2>학생 자리 오류 신고</h2><button id="reloadSeatReports">신고 새로고침</button><div id="seatReportsList"></div></div>
     </section>
 
     <section id="menuAdminPanel" class="panel">
@@ -104,23 +108,37 @@
           <div id="menuStatus" class="status">필요할 때만 수동으로 입력하세요.</div>
         </div>
 
-        <div class="card meal-friend-admin-card">
+      </div>
+    </section>
+
+    <section id="friendAdminPanel" class="panel">
+      <div class="card">
+        <h2>밥친구 마감 시간</h2>
+        <label for="mealDeadlineInput">매일 마감 시간 (한국 시간)</label>
+        <input id="mealDeadlineInput" type="time" value="12:00" step="60">
+        <button id="saveMealDeadlineButton" class="primary">마감 시간 저장</button>
+        <p class="muted">기본은 낮 12시입니다. 변경하면 신청·취소 제한과 평일 자동 조 편성에 함께 적용됩니다.</p>
+        <div id="mealDeadlineStatus" class="status" aria-live="polite"></div>
+      </div>
+      <div class="card meal-friend-admin-card">
           <div class="section-heading">
             <span class="section-icon">🍚</span>
             <div><span class="eyebrow">MEAL FRIEND</span><h2>밥친구 선택 현황</h2></div>
           </div>
           <p class="muted">
-            10층과 20층 선택자를 층별로 3~4명씩 편성합니다.
-            선택하지 않은 학생은 혼자 먹기로 분류되며, 관리자가 층을 직접 지정할 수 있습니다.
+            10층과 20층 선택자를 층별로 3~4명씩 편성합니다. 같은 층 신청자가 5명이면 5명 조 하나로 편성합니다.
+            미신청 학생은 조에 포함되지 않습니다. 명단은 관리자만 조회하며, 관리자가 층을 직접 지정할 수 있습니다.
           </p>
+          <label for="friendDate">조회·편성 날짜</label>
+          <input id="friendDate" type="date">
           <div class="actions">
             <button id="loadChoicesButton">선택 현황 조회</button>
             <button id="generateGroupsButton" class="success">오늘의 밥친구 생성</button>
           </div>
           <div id="choicesList">조회 전입니다.</div>
+          <div id="adminFriendGroups"></div>
           <div id="groupStatus" class="status">10층과 20층 조는 서로 독립적으로 생성됩니다.</div>
         </div>
-      </div>
     </section>
 
     <section id="studentAdminPanel" class="panel">
@@ -142,7 +160,7 @@
           <div class="metric-row">
             <div class="metric"><b id="activeStudentCount">0</b><span>활성 학생</span></div>
             <div class="metric"><b id="allStudentCount">0</b><span>전체 기록</span></div>
-            <div class="metric"><b id="seatCapacity">29</b><span>배치 가능 좌석</span></div>
+            <div class="metric"><b id="seatCapacity">30</b><span>배치 가능 좌석</span></div>
           </div>
           <p class="muted">배정 제외로 설정한 자리만 비워둡니다. 모든 활성 학생을 배치한 뒤 예약할 수 있습니다.</p>
         </div>
@@ -175,27 +193,15 @@
   </div>
 </div>
 
-<script src="common.js?v=20260921-seat26"></script>
-<script>
+<script src="common.js?v=20261006-class-management"></script>
+<script type="module">
+import { drawSeating } from "./shared/classroom.js";
 let candidateAssignment=null;
 let savedSchedules=[];
 let managedStudents=[];
 let activeStudents=[];
 
-const RIGHT_SEATS=[3,4,5,8,9,10,13,14,15,18,19,20,23,24,25,28,29,30];
-const LEFT_SEATS=[2,6,7,11,12,16,17,21,22,26,27];
-const AVAILABLE_SEATS=[...SEATS];
 const excludedSeats=new Set();
-try{
-  const saved=JSON.parse(localStorage.getItem("excludedSeats") || "[]");
-  if(Array.isArray(saved)) saved.filter(seat=>SEATS.includes(seat)).forEach(seat=>excludedSeats.add(seat));
-  // 과거의 2번 고정 빈자리 설정을 한 번만 해제합니다.
-  if(!localStorage.getItem("fixedEmptySeatMigrationV2")){
-    excludedSeats.delete(2);
-    localStorage.setItem("excludedSeats",JSON.stringify([...excludedSeats]));
-    localStorage.setItem("fixedEmptySeatMigrationV2","done");
-  }
-}catch{}
 
 function assignmentError(){
   const capacity=SEATS.length-excludedSeats.size;
@@ -250,33 +256,29 @@ function renderSeatEditor(){
 
 function renderExcludedOptions(){
   const box=document.getElementById("excludedSeatOptions");
-  box.innerHTML=SEATS.slice().sort((a,b)=>a-b).map(seat=>`<label><input type="checkbox" value="${seat}" ${excludedSeats.has(seat)?"checked":""}>${seat}번</label>`).join("");
-  box.querySelectorAll("input").forEach(input=>input.onchange=()=>{
-    const seat=Number(input.value);
-    if(input.checked){
-      excludedSeats.add(seat);
-      if(candidateAssignment) delete candidateAssignment[seat];
-    }else excludedSeats.delete(seat);
-    try{localStorage.setItem("excludedSeats",JSON.stringify([...excludedSeats]));}catch{}
-    document.getElementById("seatStatus").textContent="제외 설정을 적용했습니다. 자동 생성하거나 직접 배치를 완료해주세요.";
-    renderSeatEditor();
+  box.innerHTML=SEATS.slice().sort((a,b)=>a-b).map(seat=>{
+    const state=seatStatuses.find(item=>item.seat_number===seat);
+    return `<div class="seat-status-row" data-seat="${seat}"><label><input type="checkbox" ${state?.is_unavailable?"checked":""}>${seat}번 사용 불가</label><input class="seat-reason" aria-label="${seat}번 사용 불가 사유" maxlength="300" placeholder="고장·사용 불가 사유" value="${escapeHtml(state?.reason || "")}"><button type="button">저장</button></div>`;
+  }).join("");
+  box.querySelectorAll(".seat-status-row").forEach(row=>{
+    row.querySelector("button").onclick=async()=>{
+      const button=row.querySelector("button");button.disabled=true;
+      const status=document.getElementById("seatStateStatus");
+      try{
+        await adminRequest("set_seat_status",{seatNumber:Number(row.dataset.seat),isUnavailable:row.querySelector('input[type="checkbox"]').checked,reason:row.querySelector(".seat-reason").value});
+        await loadSeatStatuses();status.className="status ok";status.textContent=`${row.dataset.seat}번 좌석 상태를 저장했습니다.`;
+      }catch(error){status.className="status warn";status.textContent=error.message}
+      finally{button.disabled=false}
+    };
   });
 }
 
-const SEATING_HISTORY_LIMIT=5;
-
-// 같은 자리에 다시 앉는 것을 가장 강하게 피합니다.
-// 최근 자리일수록 더 큰 패널티를 부여합니다.
-const SAME_SEAT_RECENCY_PENALTIES=[5000,3000,1800,1000,500];
-const SAME_ROW_PENALTY=35;
-const ADJACENT_PENALTY=80;
-const GENERATION_ATTEMPTS=20000;
-
-
-/*
-  관리자가 제외한 좌석도 비워둡니다.
-  사용 가능한 좌석보다 학생이 적으면 추가 빈자리를 오른쪽부터 선정합니다.
-*/
+async function loadSeatStatuses(){
+  const data=await adminRequest("list_seat_statuses");seatStatuses=data.seats;
+  excludedSeats.clear();seatStatuses.filter(item=>item.is_unavailable).forEach(item=>excludedSeats.add(item.seat_number));
+  if(candidateAssignment)excludedSeats.forEach(seat=>delete candidateAssignment[seat]);
+  renderExcludedOptions();renderSeatEditor();
+}
 
 async function adminRequest(action,payload={}){
   if(location.protocol==="file:") throw new Error("HTML 파일을 직접 열면 관리자 API를 사용할 수 없습니다. 배포된 사이트 또는 Vercel 개발 서버에서 접속해주세요.");
@@ -294,205 +296,17 @@ async function adminRequest(action,payload={}){
   return data;
 }
 
-function pairKey(a,b){return [a,b].sort().join("||")}
-function shuffle(array){
-  const result=[...array];
-  for(let i=result.length-1;i>0;i--){
-    const j=Math.floor(Math.random()*(i+1));
-    [result[i],result[j]]=[result[j],result[i]];
-  }
-  return result;
-}
 
-function evaluateAssignment(assignment){
-  const recentSchedules=[...savedSchedules]
-    .sort((a,b)=>String(b.effective_date).localeCompare(String(a.effective_date)))
-    .slice(0,SEATING_HISTORY_LIMIT);
-
-  const previousRowPairs=new Set();
-  const previousAdjacentPairs=new Set();
-
-  recentSchedules.forEach(schedule=>{
-    ROWS.forEach(row=>{
-      const names=row
-        .map(seat=>schedule.assignment?.[seat])
-        .filter(Boolean);
-
-      for(let i=0;i<names.length;i++){
-        for(let j=i+1;j<names.length;j++){
-          previousRowPairs.add(pairKey(names[i],names[j]));
-        }
-      }
-
-      for(let i=0;i<row.length-1;i++){
-        const first=schedule.assignment?.[row[i]];
-        const second=schedule.assignment?.[row[i+1]];
-        if(first && second){
-          previousAdjacentPairs.add(pairKey(first,second));
-        }
-      }
-    });
-  });
-
-  let score=0;
-  let sameSeatRepeats=0;
-  let rowRepeats=0;
-  let adjacentRepeats=0;
-
-  /*
-    1순위: 최근 5회와 같은 좌석 피하기.
-    바로 전 배치와 같은 자리면 5000점,
-    그 다음은 3000 → 1800 → 1000 → 500점.
-    따라서 같은 줄/옆자리보다 같은 자리 반복이 훨씬 불리합니다.
-  */
-  Object.entries(assignment).forEach(([seatText,student])=>{
-    if(!student) return;
-
-    const seat=Number(seatText);
-
-    recentSchedules.forEach((schedule,index)=>{
-      if(schedule.assignment?.[seat]===student){
-        score+=SAME_SEAT_RECENCY_PENALTIES[index] ?? 500;
-        sameSeatRepeats++;
-      }
-    });
-  });
-
-  ROWS.forEach(row=>{
-    const names=row
-      .map(seat=>assignment?.[seat])
-      .filter(Boolean);
-
-    for(let i=0;i<names.length;i++){
-      for(let j=i+1;j<names.length;j++){
-        if(previousRowPairs.has(pairKey(names[i],names[j]))){
-          score+=SAME_ROW_PENALTY;
-          rowRepeats++;
-        }
-      }
-    }
-
-    for(let i=0;i<row.length-1;i++){
-      const first=assignment?.[row[i]];
-      const second=assignment?.[row[i+1]];
-
-      if(first && second && previousAdjacentPairs.has(pairKey(first,second))){
-        score+=ADJACENT_PENALTY;
-        adjacentRepeats++;
-      }
-    }
-  });
-
-  return {
-    score,
-    sameSeatRepeats,
-    rowRepeats,
-    adjacentRepeats,
-    historyCount:recentSchedules.length
-  };
-}
 
 function generateAssignment(){
   const status=document.getElementById("seatStatus");
-
-  if(!activeStudents.length){
-    status.className="status warn";
-    status.textContent="활성 학생이 없습니다.";
-    return;
-  }
-
-  const availableSeats=AVAILABLE_SEATS.filter(seat=>!excludedSeats.has(seat));
-  if(activeStudents.length>availableSeats.length){
-    status.className="status warn";
-    status.textContent=
-      `배정 제외 설정에 따라 최대 ${availableSeats.length}명까지 배치할 수 있습니다. ` +
-      `현재 활성 학생은 ${activeStudents.length}명입니다.`;
-    return;
-  }
-
-  /*
-    제외 좌석을 먼저 빼고, 남는 빈자리를 오른쪽에서 우선 선정합니다.
-  */
-  const additionalEmptyCount=availableSeats.length-activeStudents.length;
-  const emptyPriority=[...shuffle(RIGHT_SEATS.filter(seat=>!excludedSeats.has(seat))),...shuffle(LEFT_SEATS.filter(seat=>!excludedSeats.has(seat)))];
-  const emptySeats=new Set([...excludedSeats,...emptyPriority.slice(0,additionalEmptyCount)]);
-  const occupiedSeats=availableSeats.filter(seat=>!emptySeats.has(seat));
-
-  let bestAssignment=null;
-  let bestEvaluation={
-    score:Number.POSITIVE_INFINITY,
-    sameSeatRepeats:Number.POSITIVE_INFINITY,
-    rowRepeats:Number.POSITIVE_INFINITY,
-    adjacentRepeats:Number.POSITIVE_INFINITY,
-    historyCount:0
-  };
-
-  for(let attempt=0;attempt<GENERATION_ATTEMPTS;attempt++){
-    const candidate={};
-    const shuffledStudents=shuffle(activeStudents);
-    const shuffledSeats=shuffle(occupiedSeats);
-
-    shuffledSeats.forEach((seat,index)=>{
-      candidate[seat]=shuffledStudents[index];
-    });
-
-    const evaluation=evaluateAssignment(candidate);
-
-    if(
-      evaluation.score<bestEvaluation.score ||
-      (
-        evaluation.score===bestEvaluation.score &&
-        evaluation.sameSeatRepeats<bestEvaluation.sameSeatRepeats
-      ) ||
-      (
-        evaluation.score===bestEvaluation.score &&
-        evaluation.sameSeatRepeats===bestEvaluation.sameSeatRepeats &&
-        evaluation.adjacentRepeats<bestEvaluation.adjacentRepeats
-      ) ||
-      (
-        evaluation.score===bestEvaluation.score &&
-        evaluation.sameSeatRepeats===bestEvaluation.sameSeatRepeats &&
-        evaluation.adjacentRepeats===bestEvaluation.adjacentRepeats &&
-        evaluation.rowRepeats<bestEvaluation.rowRepeats
-      )
-    ){
-      bestAssignment=candidate;
-      bestEvaluation=evaluation;
-
-      /*
-        같은 자리/같은 줄/옆자리 반복이 모두 0이면
-        더 탐색할 필요가 없습니다.
-      */
-      if(
-        evaluation.sameSeatRepeats===0 &&
-        evaluation.rowRepeats===0 &&
-        evaluation.adjacentRepeats===0
-      ){
-        break;
-      }
-    }
-  }
-
-  candidateAssignment=bestAssignment;
-  renderSeatEditor();
-
-  const emptySeatText=[...emptySeats]
-    .sort((a,b)=>a-b)
-    .map(seat=>`${seat}번`)
-    .join(", ");
-
-  status.className=
-    bestEvaluation.sameSeatRepeats===0
-      ? "status ok"
-      : "status warn";
-
-  status.textContent=[
-    `빈자리: ${emptySeatText}`,
-    `최근 예약 ${bestEvaluation.historyCount}회 참고`,
-    `같은 자리 반복 ${bestEvaluation.sameSeatRepeats}건`,
-    `같은 줄 반복 ${bestEvaluation.rowRepeats}건`,
-    `옆자리 반복 ${bestEvaluation.adjacentRepeats}건`
-  ].join(" · ");
+  try{
+    candidateAssignment=drawSeating(activeStudents,[...excludedSeats]);
+    renderSeatEditor();
+    const empty=SEATS.filter(seat=>!excludedSeats.has(seat) && !candidateAssignment[seat]);
+    status.className="status ok";
+    status.textContent=`학생과 사용 가능한 좌석을 각각 무작위로 추첨했습니다. 빈자리: ${empty.map(seat=>seat+"번").join(", ") || "없음"}`;
+  }catch(error){status.className="status warn";status.textContent=error.message}
 }
 
 function renderModalSeats(assignment){
@@ -607,7 +421,7 @@ async function loadSchedules(){
   document.getElementById("scheduleList").innerHTML=savedSchedules.length
     ? savedSchedules.map(item=>`
         <div class="schedule-card">
-          <b>${escapeHtml(item.effective_date)}</b>
+          <div><b>적용일 ${escapeHtml(item.effective_date)}</b><p class="muted">공개일 ${escapeHtml(seatingPublicationDate(item.effective_date))}</p></div>
           <div class="actions">
             <button onclick="viewSchedule(${item.id})">보기</button>
             <button class="danger" onclick="deleteSchedule(${item.id},'${escapeHtml(item.effective_date)}')">삭제</button>
@@ -633,10 +447,12 @@ window.deleteSchedule=async function(id,date){
 
 async function showAdmin(){
   document.getElementById("effectiveDate").value=today();
+  updateSeatPublicationHint();
   document.getElementById("menuDate").value=today();
+  document.getElementById("friendDate").value=today();
   renderExcludedOptions();
   renderSeatEditor();
-  await Promise.all([loadStudents(),loadSchedules()]);
+  await Promise.all([loadStudents(),loadSchedules(),loadSeatStatuses(),loadMealSettings(),loadSeatReports()]);
   document.getElementById("loginSection").style.display="none";
   document.getElementById("adminApp").style.display="block";
 }
@@ -675,6 +491,14 @@ document.getElementById("seatMode").onchange=()=>{
   renderSeatEditor();
 };
 document.getElementById("generateSeatButton").onclick=generateAssignment;
+function updateSeatPublicationHint(){
+  const date=document.getElementById("effectiveDate").value;
+  const publicationDate=seatingPublicationDate(date);
+  document.getElementById("seatPublicationHint").textContent=publicationDate
+    ? `${publicationDate}부터 공개됩니다. 다음 자리표 공개 전까지 이 자리표가 표시됩니다.`
+    : "적용일을 선택하면 공개일이 자동으로 계산됩니다.";
+}
+document.getElementById("effectiveDate").onchange=updateSeatPublicationHint;
 document.getElementById("saveSeatButton").onclick=async()=>{
   const date=document.getElementById("effectiveDate").value;
   try{
@@ -683,7 +507,7 @@ document.getElementById("saveSeatButton").onclick=async()=>{
     if(!date) throw new Error("적용 날짜를 선택해주세요.");
     await adminRequest("save_schedule",{effectiveDate:date,assignment:candidateAssignment});
     document.getElementById("seatStatus").className="status ok";
-    document.getElementById("seatStatus").textContent=`${date} 적용 자리표를 예약했습니다.`;
+    document.getElementById("seatStatus").textContent=`${date} 적용 자리표를 등록했습니다. 공개일은 ${seatingPublicationDate(date)}입니다.`;
     document.getElementById("saveSeatButton").disabled=true;
     await loadSchedules();
   }catch(error){document.getElementById("seatStatus").className="status warn";document.getElementById("seatStatus").textContent=error.message}
@@ -712,18 +536,19 @@ document.getElementById("saveMenuButton").onclick=async()=>{
 
 document.getElementById("loadChoicesButton").onclick=async()=>{
   const box=document.getElementById("choicesList");
-  const date=document.getElementById("menuDate").value;
+  const date=document.getElementById("friendDate").value;
 
   try{
     const data=await adminRequest("list_choices",{date});
     const choices=data.choices || [];
     const labels={10:"10층",20:"20층"};
-    const summaries=[10,20,0,null].map(floor=>{
+    const summaries=[10,20,null].map(floor=>{
       const members=choices.filter(item=>item.floor===floor);
-      const label=floor==null ? "미신청" : floor===0 ? "혼자 먹기" : labels[floor];
-      const floorClass=floor==null ? "unsubmitted" : floor===0 ? "solo" : `floor-${floor}`;
+      const label=floor==null ? "미신청" : labels[floor];
+      const floorClass=floor==null ? "unsubmitted" : `floor-${floor}`;
       return `<div class="choice-summary ${floorClass}"><b>${label} · ${members.length}명</b><p>${members.length ? members.map(item=>escapeHtml(item.student_name)).join(", ") : "없음"}</p></div>`;
     }).join("");
+    document.getElementById("adminFriendGroups").innerHTML=(data.groups || []).filter(group=>[10,20].includes(group.floor)).map(group=>`<div class="box"><b>${group.floor}층 ${group.floor_group_no}조</b><p>${group.members.map(escapeHtml).join(", ")}</p></div>`).join("") || '<p class="muted">편성된 조가 없습니다.</p>';
     const unassigned=choices.filter(item=>item.floor==null);
     const assignmentRows=unassigned.length
       ? unassigned.map((item,index)=>`
@@ -764,7 +589,7 @@ document.getElementById("loadChoicesButton").onclick=async()=>{
 
 document.getElementById("generateGroupsButton").onclick=async()=>{
   const status=document.getElementById("groupStatus");
-  const date=document.getElementById("menuDate").value;
+  const date=document.getElementById("friendDate").value;
 
   status.className="status";
   status.textContent="10층·20층 선택자를 층별로 편성하는 중입니다.";
@@ -785,15 +610,41 @@ document.getElementById("closeScheduleModal").onclick=()=>document.getElementByI
 document.getElementById("scheduleModal").onclick=event=>{if(event.target.id==="scheduleModal")event.currentTarget.classList.remove("open")};
 
 function openAdminPanel(panel){
-  ["seat","menu","student"].forEach(name=>{
+  ["seat","menu","friend","student"].forEach(name=>{
     document.getElementById(`${name}AdminPanel`).classList.toggle("active",panel===name);
     document.getElementById(`${name}AdminTab`).classList.toggle("primary",panel===name);
   });
   if(panel==="student")loadStudents();
+  if(panel==="friend")document.getElementById("loadChoicesButton").click();
 }
 document.getElementById("seatAdminTab").onclick=()=>openAdminPanel("seat");
 document.getElementById("menuAdminTab").onclick=()=>openAdminPanel("menu");
 document.getElementById("studentAdminTab").onclick=()=>openAdminPanel("student");
+document.getElementById("friendAdminTab").onclick=()=>openAdminPanel("friend");
+
+
+async function loadMealSettings(){
+  const data=await adminRequest("get_class_settings");
+  document.getElementById("mealDeadlineInput").value=data.settings.mealDeadline;
+}
+document.getElementById("saveMealDeadlineButton").onclick=async()=>{
+  const button=document.getElementById("saveMealDeadlineButton"),status=document.getElementById("mealDeadlineStatus");button.disabled=true;
+  try{await adminRequest("save_meal_deadline",{deadline:document.getElementById("mealDeadlineInput").value});status.className="status ok";status.textContent="마감 시간을 저장했습니다. 오늘 신청·취소에도 즉시 적용됩니다.";}
+  catch(error){status.className="status warn";status.textContent=error.message}finally{button.disabled=false}
+};
+async function loadSeatReports(){
+  const box=document.getElementById("seatReportsList");
+  try{
+    const data=await adminRequest("list_seat_reports");
+    box.innerHTML=data.reports.length?data.reports.map(item=>`<div class="seat-report"><b>${item.seat_number}번 · ${escapeHtml(item.reporter_name)}</b><p>${escapeHtml(item.reason)}</p><small>${escapeHtml(new Date(item.created_at).toLocaleString("ko-KR",{timeZone:"Asia/Seoul"}))} · ${item.status==="resolved"?"처리 완료":"접수"}</small>${item.status==="open"?`<button data-report="${item.id}">처리 완료</button>`:""}</div>`).join(""):'<p class="muted">접수된 신고가 없습니다.</p>';
+    box.querySelectorAll("[data-report]").forEach(button=>button.onclick=async()=>{
+      button.disabled=true;
+      try{await adminRequest("resolve_seat_report",{id:Number(button.dataset.report)});await loadSeatReports();}
+      catch(error){button.disabled=false;const message=document.createElement("p");message.className="status warn";message.textContent=error.message;button.parentElement.appendChild(message);}
+    });
+  }catch(error){box.textContent=error.message}
+}
+document.getElementById("reloadSeatReports").onclick=loadSeatReports;
 
 adminRequest("session").then(showAdmin).catch(error=>{
   if(error.message==="관리자 로그인이 필요합니다.") return;

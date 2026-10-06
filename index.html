@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>우리반 자리·점심</title>
-  <link rel="stylesheet" href="styles.css?v=20261003-ui-v4">
+  <link rel="stylesheet" href="styles.css?v=20261006-class-management">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
 </head>
@@ -15,7 +15,7 @@
       <span class="brand-mark">16</span>
       <div>
       <h1>우리반 자리·점심</h1>
-      <p>오늘 자리표와 메뉴를 확인하고 낮 12시까지 밥친구를 선택하세요.</p>
+      <p>오늘 자리표와 메뉴를 확인하고 밥친구를 신청하세요.</p>
       </div>
     </div>
     <a class="header-link" href="admin.html">관리자</a>
@@ -36,16 +36,30 @@
       <div class="page-card-heading">
         <div class="section-heading">
           <span class="section-icon">▦</span>
-          <div><span class="eyebrow">CLASSROOM</span><h2>현재 자리표</h2></div>
+          <div><span class="eyebrow">CLASSROOM</span><h2 id="seatTitle">현재 자리표</h2></div>
         </div>
         <span class="meta-chip">적용일 <b id="seatDate">-</b></span>
       </div>
+
+      <p id="seatPublicationStatus" class="muted">적용일 7일 전부터 새 자리표를 확인할 수 있습니다.</p>
 
       <div class="classroom">
         <div class="side left" id="leftSeats"></div>
         <div class="corridor">복도</div>
         <div class="side right" id="rightSeats"></div>
       </div>
+    </div>
+
+    <div class="card seat-report-card">
+      <h2>자리 오류 신고</h2>
+      <p class="muted">자리 번호와 오류 내용을 작성하면 관리자가 확인할 수 있습니다.</p>
+      <form id="seatReportForm">
+        <label for="reportSeatNumber">자리 번호</label><select id="reportSeatNumber" required></select>
+        <label for="reporterName">신고자 이름</label><input id="reporterName" maxlength="30" required autocomplete="name">
+        <label for="reportReason">오류·고장 사유</label><textarea id="reportReason" maxlength="500" required></textarea>
+        <button id="submitSeatReport" class="primary" type="submit">관리자에게 신고</button>
+      </form>
+      <div id="seatReportStatus" class="status" aria-live="polite"></div>
     </div>
   </section>
 
@@ -65,13 +79,20 @@
   </section>
 
   <section id="friend" class="panel friend-panel">
+      <div class="card friend-groups-card">
+        <div class="section-heading">
+          <span class="section-icon">🍚</span>
+          <div><span class="eyebrow">TODAY'S TEAM</span><h2>오늘 밥친구 조</h2></div>
+        </div>
+        <div id="friendGroups" class="groups"></div>
+      </div>
     <div class="friend-intro">
       <div>
         <span class="eyebrow">LUNCH MATCH</span>
         <h2>오늘 누구와 점심 먹을까요?</h2>
-        <p>원하는 식사 방법을 선택하면 같은 층을 고른 친구끼리 3~4명 조로 연결됩니다.</p>
+        <p>원하는 식사 방법을 선택하면 같은 층을 고른 친구끼리 3~4명 조로 연결됩니다. 같은 층 신청자가 5명이면 5명 조 하나로 편성됩니다.</p>
       </div>
-      <div class="deadline-chip">낮 12시 마감</div>
+      <div id="friendDeadlineChip" class="deadline-chip">마감 시간 확인 중</div>
     </div>
     <div class="grid friend-layout">
       <div class="card friend-choice-card">
@@ -79,15 +100,13 @@
           <span class="section-icon">✓</span>
           <div><span class="eyebrow">나의 선택</span><h2>밥친구 신청</h2></div>
         </div>
-        <p class="muted">
-          낮 12시까지 자유롭게 변경할 수 있어요. 선택하지 않으면 혼자 먹기로 분류됩니다.
-        </p>
+        <p id="friendChoiceHelp" class="muted">마감 전까지 신청·변경·취소할 수 있습니다.</p>
 
         <label for="friendStudentName">이름</label>
         <input
           id="friendStudentName"
           type="text"
-          maxlength="20"
+          maxlength="30"
           autocomplete="name"
           placeholder="이름을 입력하세요"
         >
@@ -95,12 +114,8 @@
         <fieldset class="choice-fieldset">
           <legend>식사 선택</legend>
           <div class="choice-options">
-            <label class="choice-option solo-option">
-              <input type="radio" name="friendChoice" value="solo" checked>
-              <span><b>혼자 먹기</b><small>오늘은 편하게</small></span>
-            </label>
             <label class="choice-option floor10-option">
-              <input type="radio" name="friendChoice" value="10">
+              <input type="radio" name="friendChoice" value="10" checked>
               <span><b>10층</b><small>10층 친구와 함께</small></span>
             </label>
             <label class="choice-option floor20-option">
@@ -111,7 +126,8 @@
         </fieldset>
 
         <div class="actions friend-submit-actions">
-          <button id="saveFriendChoice" class="primary friend-submit" type="button">오늘의 선택 저장</button>
+          <button id="saveFriendChoice" class="primary friend-submit" type="button" disabled>밥친구 신청·변경</button>
+          <button id="cancelFriendChoice" class="danger friend-submit" type="button" disabled>신청 취소</button>
         </div>
 
         <div id="friendChoiceStatus" class="status">
@@ -122,22 +138,16 @@
       <div class="card friend-applications-card">
         <div class="section-heading">
           <span class="section-icon">👥</span>
-          <div><span class="eyebrow">실시간 현황</span><h2>오늘 신청 목록</h2></div>
+          <div><span class="eyebrow">실시간 현황</span><h2>오늘 신청 인원</h2></div>
         </div>
         <div id="friendApplications"></div>
       </div>
-      <div class="card friend-groups-card">
-        <div class="section-heading">
-          <span class="section-icon">🍚</span>
-          <div><span class="eyebrow">TODAY'S TEAM</span><h2>오늘 밥친구 조</h2></div>
-        </div>
-        <div id="friendGroups" class="groups"></div>
-      </div>
+
     </div>
   </section>
 </main>
 
-<script src="common.js?v=20260921-seat26"></script>
+<script src="common.js?v=20261006-class-management"></script>
 <script>
 const sb=supabase.createClient(
   APP_CONFIG.SUPABASE_URL,
@@ -154,6 +164,9 @@ const studentNameInput=document.getElementById("friendStudentName");
 const saveFriendChoiceButton=document.getElementById("saveFriendChoice");
 const friendChoiceStatusBox=document.getElementById("friendChoiceStatus");
 let activeStudentNames=[];
+let mealIsOpen=false;
+let mealDeadline="12:00";
+let mealRequestBusy=false;
 
 
 async function loadActiveStudents(){
@@ -270,56 +283,52 @@ async function loadMealData(){
 
 }
 
+function updateMealButtons(){
+  const [hour,minute]=mealDeadline.split(":").map(Number);
+  const closed=!mealIsOpen || kstMinutes()>=hour*60+minute;
+  saveFriendChoiceButton.disabled=closed || mealRequestBusy;
+  document.getElementById("cancelFriendChoice").disabled=closed || mealRequestBusy;
+}
 async function loadMealFriendData(){
-  friendGroupsBox.innerHTML='<p class="muted">오늘의 조를 불러오는 중입니다.</p>';
-  friendApplicationsBox.innerHTML='<p class="muted">신청 목록을 불러오는 중입니다.</p>';
-  const isOpen=kstHour()<12;
-  saveFriendChoiceButton.disabled=!isOpen;
-  friendDeadlineBox.textContent=isOpen
-    ? "낮 12시까지 선택을 변경할 수 있습니다. 미선택자는 혼자 먹기로 분류됩니다."
-    : "오늘 선택이 마감되었습니다. 미선택자는 혼자 먹기로 분류되었습니다.";
-
   try{
     const response=await fetch("/api/meal-friends",{cache:"no-store"});
     const data=await response.json();
-    if(!response.ok || !data.ok) throw new Error(data.message || `HTTP ${response.status}`);
-
-    friendApplicationsBox.innerHTML=[10,20,0,null].map(floor=>{
-      const applicants=data.applications.filter(item=>item.floor===floor);
-      const label=floor==null ? (isOpen ? "미신청" : "자동 혼자 먹기") : floor===0 ? "혼자 먹기" : `${floor}층`;
-      const floorClass=floor==null ? "unsubmitted" : floor===0 ? "solo" : `floor-${floor}`;
-      return `<div class="application-card ${floorClass}">
-        <div class="application-card-head"><b>${label}</b><span>${applicants.length}명</span></div>
-        <div class="name-chips">${applicants.length ? applicants.map(item=>`<span>${escapeHtml(item.studentName)}</span>`).join("") : '<span class="empty-chip">신청자 없음</span>'}</div>
-      </div>`;
+    if(!response.ok || !data.ok)throw new Error(data.message || `HTTP ${response.status}`);
+    mealIsOpen=data.isOpen;mealDeadline=data.deadline;updateMealButtons();
+    document.getElementById("friendDeadlineChip").textContent=`${data.deadline} 마감`;
+    document.getElementById("friendChoiceHelp").textContent=`${data.deadline} 전까지 신청·변경·취소할 수 있습니다. 미신청 학생은 조에 포함되지 않습니다.`;
+    friendDeadlineBox.textContent=data.isOpen?`${data.deadline} 전까지 신청을 변경하거나 취소할 수 있습니다.`:"오늘 신청이 마감되었습니다. 신청 변경과 취소는 할 수 없습니다.";
+    friendApplicationsBox.innerHTML=data.counts.map(item=>{
+      const label=item.floor===null?"미신청":`${item.floor}층`;
+      return `<div class="application-card ${item.floor===null?"unsubmitted":`floor-${item.floor}`}"><div class="application-card-head"><b>${label}</b><span>${item.count}명</span></div></div>`;
     }).join("");
-
     friendGroupsBox.innerHTML=data.floorStatuses.map(status=>{
-      const floorGroups=data.groups.filter(group=>group.floor===status.floor);
-      if(floorGroups.length){
-        return `<section class="floor-group-section floor-${status.floor}">
-          <div class="floor-section-title"><h3>${status.floor}층</h3><span>${status.applicantCount}명 참여</span></div>
-          ${floorGroups.map(group=>`
-            <div class="box meal-group-card">
-              <b>${group.floorGroupNo}조</b>
-              <div class="group-members">${group.members.map(member=>`<div class="group-member">${escapeHtml(member)}</div>`).join("")}</div>
-            </div>`).join("")}
-        </section>`;
-      }
-      return isOpen
-        ? `<div class="floor-waiting floor-${status.floor}"><b>${status.floor}층</b><span>신청 ${status.applicantCount}명 · 조 생성 대기 중</span></div>`
-        : `<div class="floor-waiting failed floor-${status.floor}"><b>${status.floor}층</b><span>오늘의 밥친구 생성 실패 · ${status.applicantCount}명</span></div>`;
+      const groups=data.groups.filter(group=>group.floor===status.floor);
+      if(groups.length)return `<section class="floor-group-section floor-${status.floor}"><div class="floor-section-title"><h3>${status.floor}층</h3><span>${groups.reduce((sum,group)=>sum+group.members.length,0)}명 참여</span></div>${groups.map(group=>`<div class="box meal-group-card"><b>${group.floorGroupNo}조</b><div class="group-members">${group.members.map(member=>`<div class="group-member">${escapeHtml(member)}</div>`).join("")}</div></div>`).join("")}</section>`;
+      return `<div class="floor-waiting floor-${status.floor}"><b>${status.floor}층</b><span>신청 ${status.applicantCount}명 · ${data.isOpen?"조 생성 대기 중":"편성된 조가 없습니다"}</span></div>`;
     }).join("");
   }catch(error){
+    mealIsOpen=false;updateMealButtons();
     friendGroupsBox.innerHTML=`<div class="status warn">${escapeHtml(error.message)}</div>`;
+    friendApplicationsBox.textContent="신청 현황을 불러오지 못했습니다.";
+    friendDeadlineBox.textContent="마감 시간을 확인할 수 없어 신청과 취소가 잠시 제한됩니다.";
   }
+}
+async function loadSeatStates(){
+  const response=await fetch("/api/seats",{cache:"no-store"});
+  const data=await response.json();
+  if(!response.ok || !data.ok)throw new Error(data.message || `HTTP ${response.status}`);
+  seatStatuses=data.seats;
 }
 
 async function loadPage(){
   renderSeats({});
+  seatDateBox.textContent="-";
+  document.getElementById("seatTitle").textContent="현재 자리표";
+  document.getElementById("seatPublicationStatus").textContent="공개된 자리표가 없습니다.";
 
   try{
-    await loadActiveStudents();
+    await Promise.all([loadActiveStudents(),loadSeatStates()]);
 
     const {data,error}=await sb.rpc("get_active_seating");
 
@@ -328,6 +337,11 @@ async function loadPage(){
     if(data?.length){
       renderSeats(data[0].assignment || {});
       seatDateBox.textContent=data[0].effective_date;
+      const isUpcoming=data[0].effective_date>today();
+      document.getElementById("seatTitle").textContent=isUpcoming ? "다음 적용 자리표" : "현재 자리표";
+      document.getElementById("seatPublicationStatus").textContent=isUpcoming
+        ? `${data[0].effective_date}부터 적용할 자리표입니다. 적용일 7일 전부터 미리 공개됩니다.`
+        : "다음 자리표의 적용일 7일 전까지 이 자리표가 표시됩니다.";
     }
 
     await Promise.all([loadMealData(),loadMealFriendData()]);
@@ -362,30 +376,30 @@ function validatedStudentName(){
 }
 
 
-saveFriendChoiceButton.addEventListener("click",async()=>{
-  const inputName=validatedStudentName();
-  if(!inputName) return;
-
-  saveFriendChoiceButton.disabled=true;
+async function submitMealChoice(action){
+  const studentName=validatedStudentName();if(!studentName || mealRequestBusy)return;
+  mealRequestBusy=true;updateMealButtons();
   try{
-    const response=await fetch("/api/meal-friends",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({studentName:inputName,choice:document.querySelector('input[name="friendChoice"]:checked').value})
-    });
-    const data=await response.json();
-    if(!response.ok || !data.ok) throw new Error(data.message || `HTTP ${response.status}`);
+    const choice=document.querySelector('input[name="friendChoice"]:checked')?.value;
+    const response=await fetch("/api/meal-friends",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,studentName,choice})});
+    const data=await response.json();if(!response.ok || !data.ok)throw new Error(data.message || `HTTP ${response.status}`);
     friendChoiceStatusBox.className="status ok";
-    friendChoiceStatusBox.textContent=`${inputName}: ${data.choiceLabel} 선택을 저장했습니다.`;
-    await loadMealFriendData();
-  }catch(error){
-    friendChoiceStatusBox.className="status warn";
-    friendChoiceStatusBox.textContent=error.message;
-  }finally{
-    saveFriendChoiceButton.disabled=kstHour()>=12;
-  }
+    friendChoiceStatusBox.textContent=action==="cancel"?`${studentName}: 신청을 취소했습니다. 현재 미신청 상태입니다.`:`${studentName}: ${data.choiceLabel} 신청을 저장했습니다.`;
+  }catch(error){friendChoiceStatusBox.className="status warn";friendChoiceStatusBox.textContent=error.message}
+  finally{await loadMealFriendData();mealRequestBusy=false;updateMealButtons()}
+}
+saveFriendChoiceButton.addEventListener("click",()=>submitMealChoice("apply"));
+document.getElementById("cancelFriendChoice").addEventListener("click",()=>submitMealChoice("cancel"));
+document.getElementById("reportSeatNumber").innerHTML=SEATS.slice().sort((a,b)=>a-b).map(seat=>`<option value="${seat}">${seat}번</option>`).join("");
+document.getElementById("seatReportForm").addEventListener("submit",async event=>{
+  event.preventDefault();const button=document.getElementById("submitSeatReport"),status=document.getElementById("seatReportStatus");button.disabled=true;
+  try{
+    const response=await fetch("/api/seats",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({seatNumber:Number(document.getElementById("reportSeatNumber").value),reporterName:document.getElementById("reporterName").value.trim(),reason:document.getElementById("reportReason").value.trim()})});
+    const data=await response.json();if(!response.ok || !data.ok)throw new Error(data.message || `HTTP ${response.status}`);
+    status.className="status ok";status.textContent=data.message;document.getElementById("reportReason").value="";
+  }catch(error){status.className="status warn";status.textContent=error.message}finally{button.disabled=false}
 });
-
+setInterval(updateMealButtons,1000);
 
 loadPage();
 setInterval(loadPage,60000);

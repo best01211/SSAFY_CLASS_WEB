@@ -1,20 +1,9 @@
--- 밥친구 보안 및 데이터 정합성 패치
--- Supabase SQL Editor에서 한 번 실행하세요.
-
-alter table public.meal_choices
-  drop constraint if exists meal_choices_floor_check;
-alter table public.meal_choices
-  add constraint meal_choices_floor_check check (floor in (0, 10, 20));
+-- Supabase SQL Editor에서 실행하세요. 기존 DB의 누락된 층 컬럼도 보강합니다.
+-- 같은 층 신청자가 정확히 5명이면 5명 조 하나로 편성합니다.
+begin;
 
 alter table public.meal_groups add column if not exists floor integer;
 alter table public.meal_groups add column if not exists floor_group_no integer;
-delete from public.meal_groups where floor is null or floor_group_no is null;
-alter table public.meal_groups alter column floor set not null;
-alter table public.meal_groups alter column floor_group_no set not null;
-alter table public.meal_groups
-  drop constraint if exists meal_groups_floor_check;
-alter table public.meal_groups
-  add constraint meal_groups_floor_check check (floor in (10, 20));
 create unique index if not exists meal_groups_date_floor_no_idx
   on public.meal_groups(group_date, floor, floor_group_no);
 
@@ -140,44 +129,8 @@ begin
 end;
 $$;
 
-create or replace function public.generate_today_meal_groups()
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  perform public.generate_meal_groups_for_date(
-    (now() at time zone 'Asia/Seoul')::date
-  );
-end;
-$$;
-
 revoke all on function public.generate_meal_groups_for_date(date) from public, anon, authenticated;
 grant execute on function public.generate_meal_groups_for_date(date) to service_role;
-revoke all on function public.generate_today_meal_groups() from public, anon, authenticated;
-grant execute on function public.generate_today_meal_groups() to service_role;
-do $$
-begin
-  if to_regprocedure('public.submit_meal_choice(text,integer)') is not null then
-    execute 'revoke all on function public.submit_meal_choice(text, integer) from public, anon, authenticated';
-  end if;
-end;
-$$;
 
-do $$
-declare
-  existing_job bigint;
-begin
-  select jobid into existing_job
-    from cron.job
-   where jobname = 'generate-daily-20f-groups'
-   limit 1;
-  if existing_job is not null then
-    perform cron.unschedule(existing_job);
-  end if;
-exception
-  when undefined_table or invalid_schema_name or insufficient_privilege then
-    null;
-end;
-$$;
+commit;
+
