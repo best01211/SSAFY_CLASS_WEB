@@ -75,7 +75,7 @@ Install Command: 기본값
 
 ## 4. Vercel 환경 변수
 
-프로젝트 → Settings → Environment Variables에서 아래 두 값을 추가합니다.
+프로젝트 → Settings → Environment Variables에서 아래 값을 추가합니다.
 
 ```text
 SUPABASE_URL
@@ -86,6 +86,19 @@ https://실제프로젝트ID.supabase.co
 SUPABASE_SERVICE_ROLE_KEY
 sb_secret_...
 ```
+
+관리자 로그인에 필요한 환경 변수도 반드시 추가합니다.
+
+| 이름 | 값 |
+| --- | --- |
+| `ADMIN_ID` | 사용할 관리자 아이디 (예: `admin`) |
+| `ADMIN_PASSWORD` | 사용할 관리자 비밀번호 |
+| `ADMIN_SESSION_SECRET` | 충분히 긴 무작위 문자열 |
+| `CRON_SECRET` | 자동 실행 인증용 별도의 무작위 문자열 |
+
+기존에 코드에 고정되어 있던 관리자 계정은 자동 적용되지 않습니다. 로그인 시 입력한 값은 위 환경 변수와 일치해야 합니다. `ADMIN_SESSION_SECRET`도 없으면 로그인할 수 없습니다.
+
+HTML 파일 직접 열기나 Live Server 같은 정적 서버는 `/api/admin`을 실행하지 않습니다. 배포된 Vercel 주소에서 접속하거나, 로컬 `.env.local`에 환경 변수를 설정한 뒤 `npx vercel dev`로 실행합니다. `.env.local`은 Git에 올리지 않습니다.
 
 적용 환경은 Production, Preview, Development 모두 선택해도 됩니다.
 
@@ -149,6 +162,8 @@ https://배포주소.vercel.app/api/fetch-welplan-menu?date=20260723
 ```
 
 UTC 일요일~목요일 22:10이며, 한국 시간 월요일~금요일 오전 7:10입니다.
+
+밥친구 신청은 한국 시간 낮 12시에 마감합니다. `/api/scheduled-meal-groups`의 자동 조 편성 스케줄 `0 3 * * 1-5`는 UTC 월요일~금요일 03:00, 한국 시간 낮 12:00입니다. 시간 변경은 Vercel 재배포 후 적용됩니다.
 
 ## 7. 기존 Netlify
 

@@ -32,8 +32,13 @@ function parseCookies(request) {
 }
 
 export function validateAdminCredentials(adminId, adminPassword) {
-  return safeEqual(adminId, requiredEnv("ADMIN_ID")) &&
-    safeEqual(adminPassword, requiredEnv("ADMIN_PASSWORD"));
+  const missing = ["ADMIN_ID", "ADMIN_PASSWORD", "ADMIN_SESSION_SECRET"]
+    .filter(name => !process.env[name]);
+  if (missing.length) {
+    throw new Error(`관리자 로그인 설정이 누락되었습니다: ${missing.join(", ")}. Vercel 환경 변수를 설정한 뒤 재배포해주세요.`);
+  }
+  return safeEqual(adminId, process.env.ADMIN_ID) &&
+    safeEqual(adminPassword, process.env.ADMIN_PASSWORD);
 }
 
 export function setAdminSession(response) {

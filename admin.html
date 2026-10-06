@@ -279,13 +279,17 @@ const GENERATION_ATTEMPTS=20000;
 */
 
 async function adminRequest(action,payload={}){
+  if(location.protocol==="file:") throw new Error("HTML 파일을 직접 열면 관리자 API를 사용할 수 없습니다. 배포된 사이트 또는 Vercel 개발 서버에서 접속해주세요.");
   const response=await fetch("/api/admin",{
     method:"POST",
+    credentials:"same-origin",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({action,...payload})
   });
   let data={};
-  try{data=await response.json()}catch{}
+  try{data=await response.json()}catch{
+    throw new Error(`관리자 API 응답을 읽을 수 없습니다 (HTTP ${response.status}). 정적 서버에서는 로그인할 수 없습니다. Vercel 배포 주소 또는 개발 서버를 확인해주세요.`);
+  }
   if(!response.ok || !data.ok) throw new Error(data.message || `관리자 API 오류: HTTP ${response.status}`);
   return data;
 }
@@ -628,26 +632,38 @@ window.deleteSchedule=async function(id,date){
 };
 
 async function showAdmin(){
-  document.getElementById("loginSection").style.display="none";
-  document.getElementById("adminApp").style.display="block";
   document.getElementById("effectiveDate").value=today();
   document.getElementById("menuDate").value=today();
   renderExcludedOptions();
   renderSeatEditor();
   await Promise.all([loadStudents(),loadSchedules()]);
+  document.getElementById("loginSection").style.display="none";
+  document.getElementById("adminApp").style.display="block";
 }
 
 document.getElementById("loginButton").onclick=async()=>{
   const status=document.getElementById("loginStatus");
+  const button=document.getElementById("loginButton");
+  button.disabled=true;
+  status.className="status";
+  status.textContent="로그인 확인 중입니다.";
   try{
     await adminRequest("login",{
       adminId:document.getElementById("adminId").value.trim(),
       adminPassword:document.getElementById("adminPassword").value
     });
+    await adminRequest("session");
     document.getElementById("adminPassword").value="";
     await showAdmin();
   }catch(error){status.className="status warn";status.textContent=error.message}
+  finally{button.disabled=false}
 };
+document.getElementById("adminPassword").addEventListener("keydown",event=>{
+  if(event.key==="Enter" && !document.getElementById("loginButton").disabled){
+    event.preventDefault();
+    document.getElementById("loginButton").click();
+  }
+});
 document.getElementById("logoutButton").onclick=async()=>{
   try{await adminRequest("logout")}finally{location.reload()}
 };
@@ -779,7 +795,12 @@ document.getElementById("seatAdminTab").onclick=()=>openAdminPanel("seat");
 document.getElementById("menuAdminTab").onclick=()=>openAdminPanel("menu");
 document.getElementById("studentAdminTab").onclick=()=>openAdminPanel("student");
 
-adminRequest("session").then(showAdmin).catch(()=>{});
+adminRequest("session").then(showAdmin).catch(error=>{
+  if(error.message==="관리자 로그인이 필요합니다.") return;
+  const status=document.getElementById("loginStatus");
+  status.className="status warn";
+  status.textContent=error.message;
+});
 </script>
 </body>
 </html>

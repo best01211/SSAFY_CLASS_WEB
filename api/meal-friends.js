@@ -47,7 +47,7 @@ export default async function handler(request, response) {
 
       return response.status(200).json({
         ok: true,
-        isOpen: hour < 11,
+        isOpen: hour < 12,
         groups: resolvedGroups,
         applications: (students ?? []).map(student => ({
           studentName: student.name,
@@ -67,10 +67,10 @@ export default async function handler(request, response) {
     }
 
     if (request.method === "POST") {
-      if (hour >= 11) {
+      if (hour >= 12) {
         return response.status(400).json({
           ok: false,
-          message: "오전 11시 이후에는 밥친구 선택을 변경할 수 없습니다.",
+          message: "낮 12시 이후에는 밥친구 선택을 변경할 수 없습니다.",
         });
       }
 

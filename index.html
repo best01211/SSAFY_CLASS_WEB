@@ -15,7 +15,7 @@
       <span class="brand-mark">16</span>
       <div>
       <h1>우리반 자리·점심</h1>
-      <p>오늘 자리표와 메뉴를 확인하고 오전 11시까지 밥친구를 선택하세요.</p>
+      <p>오늘 자리표와 메뉴를 확인하고 낮 12시까지 밥친구를 선택하세요.</p>
       </div>
     </div>
     <a class="header-link" href="admin.html">관리자</a>
@@ -71,7 +71,7 @@
         <h2>오늘 누구와 점심 먹을까요?</h2>
         <p>원하는 식사 방법을 선택하면 같은 층을 고른 친구끼리 3~4명 조로 연결됩니다.</p>
       </div>
-      <div class="deadline-chip">오전 11시 마감</div>
+      <div class="deadline-chip">낮 12시 마감</div>
     </div>
     <div class="grid friend-layout">
       <div class="card friend-choice-card">
@@ -80,7 +80,7 @@
           <div><span class="eyebrow">나의 선택</span><h2>밥친구 신청</h2></div>
         </div>
         <p class="muted">
-          오전 11시까지 자유롭게 변경할 수 있어요. 선택하지 않으면 혼자 먹기로 분류됩니다.
+          낮 12시까지 자유롭게 변경할 수 있어요. 선택하지 않으면 혼자 먹기로 분류됩니다.
         </p>
 
         <label for="friendStudentName">이름</label>
@@ -273,10 +273,10 @@ async function loadMealData(){
 async function loadMealFriendData(){
   friendGroupsBox.innerHTML='<p class="muted">오늘의 조를 불러오는 중입니다.</p>';
   friendApplicationsBox.innerHTML='<p class="muted">신청 목록을 불러오는 중입니다.</p>';
-  const isOpen=kstHour()<11;
+  const isOpen=kstHour()<12;
   saveFriendChoiceButton.disabled=!isOpen;
   friendDeadlineBox.textContent=isOpen
-    ? "오전 11시까지 선택을 변경할 수 있습니다. 미선택자는 혼자 먹기로 분류됩니다."
+    ? "낮 12시까지 선택을 변경할 수 있습니다. 미선택자는 혼자 먹기로 분류됩니다."
     : "오늘 선택이 마감되었습니다. 미선택자는 혼자 먹기로 분류되었습니다.";
 
   try{
@@ -382,7 +382,7 @@ saveFriendChoiceButton.addEventListener("click",async()=>{
     friendChoiceStatusBox.className="status warn";
     friendChoiceStatusBox.textContent=error.message;
   }finally{
-    saveFriendChoiceButton.disabled=kstHour()>=11;
+    saveFriendChoiceButton.disabled=kstHour()>=12;
   }
 });
 
