@@ -4,6 +4,7 @@ import { test, before, after } from "node:test";
 import vm from "node:vm";
 import { PGlite } from "@electric-sql/pglite";
 import { drawSeating, SEAT_NUMBERS, validateAssignment } from "../shared/classroom.js";
+import { createProximityGroups, proximityGroupSizes, seatDistance } from "../shared/proximity-groups.js";
 import { getClassSettings, isMealOpen, kstClock, validDeadline, mealSummary } from "../api/_class-settings.js";
 import { errorMessage } from "../api/_errors.js";
 
@@ -21,6 +22,9 @@ before(async () => {
   const migration = await readFile(new URL("../class_management_update.sql", import.meta.url), "utf8");
   await db.exec(migration);
   await db.exec(migration);
+  const proximityMigration = await readFile(new URL("../proximity_groups_update.sql", import.meta.url), "utf8");
+  await db.exec(proximityMigration);
+  await db.exec(proximityMigration);
 });
 after(async () => { await db?.close(); });
 
@@ -98,9 +102,34 @@ test("database and server validation reject unavailable seats; seat one is avail
 test("students cannot directly read application lists or reports, or call private mutation RPCs",async()=>{
   await db.exec('set role anon');
   try{
-    for(const table of ['meal_choices','meal_groups','seat_reports','class_settings']) await assert.rejects(db.query(`select * from ${table}`), error=>error.code==='42501');
+    for(const table of ['meal_choices','meal_groups','seat_reports','class_settings','proximity_group_sets']) await assert.rejects(db.query(`select * from ${table}`), error=>error.code==='42501');
     await assert.rejects(db.query("select submit_meal_friend('test_1',10,false)"),error=>error.code==='42501');
   }finally{await db.exec('reset role')}
+});
+
+test("seat proximity grouping covers everyone once and keeps every group in the requested range",()=>{
+  const assignment=Object.fromEntries(Array.from({length:27},(_,index)=>[index+1,`student_${index+1}`]));
+  const groups=createProximityGroups(assignment,3,4);
+  assert.deepEqual(groups.map(group=>group.members.length).sort((a,b)=>b-a),[4,4,4,4,4,4,3]);
+  assert.equal(new Set(groups.flatMap(group=>group.members.map(member=>member.studentName))).size,27);
+  assert.equal(new Set(groups.flatMap(group=>group.members.map(member=>member.seatNumber))).size,27);
+  assert.ok(groups.every(group=>group.members.every(member=>Number.isInteger(member.seatNumber))));
+  assert.ok(groups.every(group=>group.members.every((member,index)=>group.members.slice(index+1).every(other=>seatDistance(member.seatNumber,other.seatNumber)<=2))));
+  assert.equal(seatDistance(1,2),1);
+  assert.equal(seatDistance(2,3),2);
+  assert.deepEqual(proximityGroupSizes(10,3,4),[4,3,3]);
+  assert.throws(()=>proximityGroupSizes(5,3,4),/나눌 수 없습니다/);
+  assert.throws(()=>createProximityGroups({1:'a',2:'b',3:'c',4:'d',5:'e'},3,4),/나눌 수 없습니다/);
+});
+
+test("proximity group storage enforces bounds and references a real seating schedule",async()=>{
+  await db.query("insert into seating_schedules(effective_date,assignment)values('2026-10-20','{\"1\":\"test_1\"}') on conflict(effective_date)do nothing");
+  await db.query("insert into proximity_group_sets(id,seating_effective_date,min_size,max_size,groups)values(true,'2026-10-20',3,4,'[]')");
+  await assert.rejects(db.query("update proximity_group_sets set min_size=1"),/check constraint/);
+  await assert.rejects(db.query("update proximity_group_sets set max_size=11"),/check constraint/);
+  await assert.rejects(db.query("update proximity_group_sets set groups='{}'"),/check constraint/);
+  await db.query("update seating_schedules set assignment='{\"1\":\"test_2\"}' where effective_date='2026-10-20'");
+  assert.equal((await db.query("select count(*)::int as count from proximity_group_sets")).rows[0].count,0);
 });
 
 test("random drawing includes every available seat, excludes broken seats, and shuffles people",()=>{
@@ -139,7 +168,7 @@ test("student API sends only counts for applications and calls cancellation RPC;
   assert.equal((await call(student,'POST',{studentName:'a',action:'cancel'})).code,200);assert.equal(rpcCalls[0].args.p_cancel,true);assert.equal(rpcCalls[0].args.p_floor,null);
   assert.equal((await call(student,'POST',{studentName:'a',choice:'solo'})).code,400);
   const admin=await handler('admin.js');
-  for(const action of ['list_choices','set_seat_status','list_seat_reports','save_meal_deadline']) assert.equal((await call(admin,'POST',{action})).code,401);
+  for(const action of ['list_choices','set_seat_status','list_seat_reports','save_meal_deadline','get_proximity_groups','generate_proximity_groups']) assert.equal((await call(admin,'POST',{action})).code,401);
 });
 
 test("embedded scripts parse and today's group card precedes the application form",async()=>{

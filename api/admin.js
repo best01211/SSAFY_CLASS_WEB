@@ -4,6 +4,7 @@ import { generateMealGroups } from "./_meal-groups.js";
 import { errorMessage } from "./_errors.js";
 import { getClassSettings, validDeadline } from "./_class-settings.js";
 import { SEAT_NUMBERS, validateAssignment } from "../shared/classroom.js";
+import { createProximityGroups } from "../shared/proximity-groups.js";
 import {
   clearAdminSession,
   isAdminRequest,
@@ -24,6 +25,22 @@ function getClient() {
   return createClient(url, key, {
     auth: { persistSession: false },
   });
+}
+
+function koreanDate() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+async function getCurrentSeating(sb) {
+  const { data, error } = await sb
+    .from("seating_schedules")
+    .select("effective_date,assignment")
+    .lte("effective_date", koreanDate())
+    .order("effective_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
 }
 
 export default async function handler(request, response) {
@@ -96,6 +113,47 @@ export default async function handler(request, response) {
       const { error } = await sb.from("seat_reports").update({ status: "resolved", resolved_at: new Date().toISOString() }).eq("id", Number(body.id));
       if (error) throw error;
       return response.status(200).json({ ok: true });
+    }
+    if (body.action === "get_proximity_groups") {
+      const seating = await getCurrentSeating(sb);
+      const { data: saved, error } = await sb.from("proximity_group_sets").select("*").eq("id", true).maybeSingle();
+      if (error) throw error;
+      const current = seating && saved?.seating_effective_date === seating.effective_date ? saved : null;
+      return response.status(200).json({
+        ok: true,
+        effectiveDate: seating?.effective_date ?? null,
+        minSize: current?.min_size ?? 3,
+        maxSize: current?.max_size ?? 4,
+        groups: current?.groups ?? [],
+        generatedAt: current?.updated_at ?? null,
+        needsGeneration: Boolean(seating) && !current,
+      });
+    }
+    if (body.action === "generate_proximity_groups") {
+      const minSize = Number(body.minSize);
+      const maxSize = Number(body.maxSize);
+      const seating = await getCurrentSeating(sb);
+      if (!seating) return response.status(400).json({ ok: false, message: "현재 적용 중인 자리표가 없습니다." });
+      const groups = createProximityGroups(seating.assignment, minSize, maxSize);
+      const savedAt = new Date().toISOString();
+      const { error } = await sb.from("proximity_group_sets").upsert({
+        id: true,
+        seating_effective_date: seating.effective_date,
+        min_size: minSize,
+        max_size: maxSize,
+        groups,
+        updated_at: savedAt,
+      }, { onConflict: "id" });
+      if (error) throw error;
+      return response.status(200).json({
+        ok: true,
+        effectiveDate: seating.effective_date,
+        minSize,
+        maxSize,
+        groups,
+        generatedAt: savedAt,
+        needsGeneration: false,
+      });
     }
 
     if (body.action === "list_schedules") {

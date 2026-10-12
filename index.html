@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>우리반 자리·점심</title>
-  <link rel="stylesheet" href="styles.css?v=20261006-class-management">
+  <link rel="stylesheet" href="styles.css?v=20261012-proximity-groups">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
 </head>
@@ -15,7 +15,7 @@
       <span class="brand-mark">16</span>
       <div>
       <h1>우리반 자리·점심</h1>
-      <p>오늘 자리표와 메뉴를 확인하고 밥친구를 신청하세요.</p>
+      <p>자리표와 메뉴를 확인하고 가까운 친구들과 조를 확인하세요.</p>
       </div>
     </div>
     <a class="header-link" href="admin.html">관리자</a>
@@ -29,6 +29,7 @@
     <button id="seatTab" class="primary" type="button">자리표</button>
     <button id="mealTab" type="button">오늘 점심</button>
     <button id="friendTab" type="button">밥친구</button>
+    <button id="teamTab" type="button">조 만들기</button>
   </div>
 
   <section id="seat" class="panel active">
@@ -145,6 +146,29 @@
 
     </div>
   </section>
+
+  <section id="team" class="panel proximity-panel">
+    <div class="proximity-intro">
+      <div>
+        <span class="eyebrow">SEAT NEIGHBORS</span>
+        <h2>자리 기준 조 만들기</h2>
+        <p>회의할 때 모이기 쉽도록 현재 자리에서 가까운 학생끼리 편성한 조입니다.</p>
+      </div>
+      <div id="proximitySizeChip" class="deadline-chip">편성 정보 확인 중</div>
+    </div>
+    <div class="card proximity-groups-card">
+      <div class="page-card-heading">
+        <div class="section-heading">
+          <span class="section-icon">◎</span>
+          <div><span class="eyebrow">CURRENT GROUPS</span><h2>현재 조 편성</h2></div>
+        </div>
+        <span class="meta-chip">자리표 적용일 <b id="proximitySeatDate">-</b></span>
+      </div>
+      <p id="proximityDescription" class="muted">관리자가 조를 생성하면 이곳에 표시됩니다.</p>
+      <div id="proximityGroups" class="proximity-groups"></div>
+      <div id="proximityStatus" class="status">조 편성을 불러오는 중입니다.</div>
+    </div>
+  </section>
 </main>
 
 <script src="common.js?v=20261006-class-management"></script>
@@ -163,6 +187,7 @@ const friendDeadlineBox=document.getElementById("friendDeadline");
 const studentNameInput=document.getElementById("friendStudentName");
 const saveFriendChoiceButton=document.getElementById("saveFriendChoice");
 const friendChoiceStatusBox=document.getElementById("friendChoiceStatus");
+const proximityGroupsBox=document.getElementById("proximityGroups");
 let activeStudentNames=[];
 let mealIsOpen=false;
 let mealDeadline="12:00";
@@ -188,16 +213,62 @@ function showPanel(id){
   document.getElementById("seatTab").classList.toggle("primary",id==="seat");
   document.getElementById("mealTab").classList.toggle("primary",id==="meal");
   document.getElementById("friendTab").classList.toggle("primary",id==="friend");
+  document.getElementById("teamTab").classList.toggle("primary",id==="team");
 
   if(id==="meal"){
     loadMealData();
   }
   if(id==="friend") loadMealFriendData();
+  if(id==="team") loadProximityGroups();
 }
 
 document.getElementById("seatTab").addEventListener("click",()=>showPanel("seat"));
 document.getElementById("mealTab").addEventListener("click",()=>showPanel("meal"));
 document.getElementById("friendTab").addEventListener("click",()=>showPanel("friend"));
+document.getElementById("teamTab").addEventListener("click",()=>showPanel("team"));
+
+async function loadProximityGroups(){
+  const status=document.getElementById("proximityStatus");
+  status.className="status";
+  status.textContent="자리 기준 조 편성을 불러오는 중입니다.";
+  try{
+    const response=await fetch("/api/proximity-groups",{cache:"no-store"});
+    const data=await response.json();
+    if(!response.ok || !data.ok)throw new Error(data.message || `HTTP ${response.status}`);
+    document.getElementById("proximitySeatDate").textContent=data.effectiveDate || "-";
+    document.getElementById("proximitySizeChip").textContent=data.minSize && data.maxSize
+      ? `${data.minSize}~${data.maxSize}명 · ${data.groups.length}개 조`
+      : "아직 생성 전";
+    if(!data.effectiveDate){
+      proximityGroupsBox.innerHTML="";
+      document.getElementById("proximityDescription").textContent="현재 적용 중인 자리표가 없습니다.";
+      status.className="status warn";status.textContent="자리표가 적용된 뒤 조를 만들 수 있습니다.";
+      return;
+    }
+    if(!data.groups.length){
+      proximityGroupsBox.innerHTML='<div class="proximity-empty"><b>생성된 조가 없습니다.</b><span>관리자가 현재 자리표로 조를 생성하면 표시됩니다.</span></div>';
+      document.getElementById("proximityDescription").textContent=data.needsGeneration
+        ? "자리표가 변경되어 새로운 조 편성이 필요합니다."
+        : "관리자가 조를 생성하면 이곳에 표시됩니다.";
+      status.className="status warn";status.textContent="현재 자리표에 맞는 조가 아직 생성되지 않았습니다.";
+      return;
+    }
+    document.getElementById("proximityDescription").textContent=`${data.effectiveDate} 적용 자리표를 기준으로 가까운 자리끼리 편성했습니다.`;
+    proximityGroupsBox.innerHTML=data.groups.map(group=>`
+      <article class="proximity-group-card">
+        <div class="proximity-group-head"><b>${group.groupNo}조</b><span>${group.members.length}명</span></div>
+        <div class="proximity-members">${group.members.map(member=>`
+          <div class="proximity-member"><span class="seat-number-badge">${member.seatNumber}번</span><strong>${escapeHtml(member.studentName)}</strong></div>
+        `).join("")}</div>
+      </article>
+    `).join("");
+    status.className="status ok";
+    status.textContent="현재 자리표와 일치하는 조 편성입니다.";
+  }catch(error){
+    proximityGroupsBox.innerHTML="";
+    status.className="status warn";status.textContent=error.message;
+  }
+}
 
 function renderMenus(menu){
   const sourceUrl=
@@ -344,7 +415,7 @@ async function loadPage(){
         : "다음 자리표의 적용일 7일 전까지 이 자리표가 표시됩니다.";
     }
 
-    await Promise.all([loadMealData(),loadMealFriendData()]);
+    await Promise.all([loadMealData(),loadMealFriendData(),loadProximityGroups()]);
 
     statusBox.className="status ok";
     statusBox.textContent="최신 정보를 불러왔습니다.";

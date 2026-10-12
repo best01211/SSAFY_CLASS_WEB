@@ -2,6 +2,8 @@
 
 **최신 관리자·밥친구·자리 기능은 [2026-10-06 변경 안내](docs/UPDATE_2026-10-06.md)를 먼저 확인하세요.** Supabase에서 `class_management_update.sql`, `class_management_cron.sql` 순서로 실행한 뒤 재배포합니다.
 
+자리 기준 조 만들기 기능을 추가로 적용하려면 Supabase SQL Editor에서 `proximity_groups_update.sql`을 실행합니다. 관리자가 최소·최대 인원을 정해 조를 생성하면 현재 적용 중인 자리표를 기준으로 가까운 학생끼리 편성됩니다.
+
 1. Supabase SQL Editor에서 `supabase_meal_group_applications.sql`을 한 번 실행합니다.
 2. 기존 프로젝트의 아래 파일을 덮어씁니다.
 

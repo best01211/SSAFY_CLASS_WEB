@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>관리자 | 우리반 자리·점심</title>
-  <link rel="stylesheet" href="styles.css?v=20261006-class-management">
+  <link rel="stylesheet" href="styles.css?v=20261012-proximity-groups">
   <script src="config.js"></script>
 </head>
 <body>
@@ -14,7 +14,7 @@
       <span class="brand-mark admin-mark">A</span>
       <div>
       <h1>관리자</h1>
-      <p>자리 배치, 점심 조, 학생 명단을 관리합니다.</p>
+      <p>자리 배치, 점심 조, 자리 기준 조와 학생 명단을 관리합니다.</p>
       </div>
     </div>
     <a class="header-link" href="index.html">학생 화면</a>
@@ -43,6 +43,7 @@
       <button class="primary" id="seatAdminTab">자리 배치</button>
       <button id="menuAdminTab">점심 관리</button>
       <button id="friendAdminTab">밥친구 관리</button>
+      <button id="teamAdminTab">조 만들기</button>
       <button id="studentAdminTab">학생 관리</button>
     </div>
 
@@ -139,6 +140,35 @@
           <div id="adminFriendGroups"></div>
           <div id="groupStatus" class="status">10층과 20층 조는 서로 독립적으로 생성됩니다.</div>
         </div>
+    </section>
+
+    <section id="teamAdminPanel" class="panel">
+      <div class="grid proximity-admin-layout">
+        <div class="card">
+          <div class="section-heading">
+            <span class="section-icon">◎</span>
+            <div><span class="eyebrow">SEAT GROUPING</span><h2>자리 기준 조 만들기</h2></div>
+          </div>
+          <p class="muted">현재 적용 중인 자리표에서 서로 가까운 학생끼리 묶습니다. 복도를 건너는 거리도 계산하므로 회의할 때 이동이 적은 조를 우선합니다.</p>
+          <div class="group-size-inputs">
+            <div><label for="proximityMinSize">최소 인원</label><input id="proximityMinSize" type="number" min="2" max="10" step="1" value="3"></div>
+            <div><label for="proximityMaxSize">최대 인원</label><input id="proximityMaxSize" type="number" min="2" max="10" step="1" value="4"></div>
+          </div>
+          <p class="muted">모든 학생이 빠짐없이 최소·최대 범위 안에 들어가야 합니다. 인원수에 따라 나눌 수 없는 범위는 생성되지 않습니다.</p>
+          <div class="actions">
+            <button id="generateProximityGroupsButton" class="primary">현재 자리로 조 생성</button>
+            <button id="reloadProximityGroupsButton">현재 결과 새로고침</button>
+          </div>
+          <div id="proximityAdminStatus" class="status">현재 조 편성을 확인하는 중입니다.</div>
+        </div>
+        <div class="card proximity-admin-result-card">
+          <div class="page-card-heading">
+            <div><span class="eyebrow">PREVIEW</span><h2>생성 결과</h2></div>
+            <span class="meta-chip">자리표 적용일 <b id="proximityAdminSeatDate">-</b></span>
+          </div>
+          <div id="proximityAdminGroups" class="proximity-groups"></div>
+        </div>
+      </div>
     </section>
 
     <section id="studentAdminPanel" class="panel">
@@ -452,7 +482,7 @@ async function showAdmin(){
   document.getElementById("friendDate").value=today();
   renderExcludedOptions();
   renderSeatEditor();
-  await Promise.all([loadStudents(),loadSchedules(),loadSeatStatuses(),loadMealSettings(),loadSeatReports()]);
+  await Promise.all([loadStudents(),loadSchedules(),loadSeatStatuses(),loadMealSettings(),loadSeatReports(),loadProximityAdmin()]);
   document.getElementById("loginSection").style.display="none";
   document.getElementById("adminApp").style.display="block";
 }
@@ -610,17 +640,66 @@ document.getElementById("closeScheduleModal").onclick=()=>document.getElementByI
 document.getElementById("scheduleModal").onclick=event=>{if(event.target.id==="scheduleModal")event.currentTarget.classList.remove("open")};
 
 function openAdminPanel(panel){
-  ["seat","menu","friend","student"].forEach(name=>{
+  ["seat","menu","friend","team","student"].forEach(name=>{
     document.getElementById(`${name}AdminPanel`).classList.toggle("active",panel===name);
     document.getElementById(`${name}AdminTab`).classList.toggle("primary",panel===name);
   });
   if(panel==="student")loadStudents();
   if(panel==="friend")document.getElementById("loadChoicesButton").click();
+  if(panel==="team")loadProximityAdmin();
 }
 document.getElementById("seatAdminTab").onclick=()=>openAdminPanel("seat");
 document.getElementById("menuAdminTab").onclick=()=>openAdminPanel("menu");
 document.getElementById("studentAdminTab").onclick=()=>openAdminPanel("student");
 document.getElementById("friendAdminTab").onclick=()=>openAdminPanel("friend");
+document.getElementById("teamAdminTab").onclick=()=>openAdminPanel("team");
+
+function renderProximityAdmin(data){
+  const box=document.getElementById("proximityAdminGroups");
+  document.getElementById("proximityAdminSeatDate").textContent=data.effectiveDate || "-";
+  if(data.groups?.length){
+    box.innerHTML=data.groups.map(group=>`<article class="proximity-group-card"><div class="proximity-group-head"><b>${group.groupNo}조</b><span>${group.members.length}명</span></div><div class="proximity-members">${group.members.map(member=>`<div class="proximity-member"><span class="seat-number-badge">${member.seatNumber}번</span><strong>${escapeHtml(member.studentName)}</strong></div>`).join("")}</div></article>`).join("");
+  }else{
+    box.innerHTML='<div class="proximity-empty"><b>생성된 조가 없습니다.</b><span>최소·최대 인원을 설정하고 조를 생성해주세요.</span></div>';
+  }
+}
+
+async function loadProximityAdmin(){
+  const status=document.getElementById("proximityAdminStatus");
+  try{
+    const data=await adminRequest("get_proximity_groups");
+    if(data.groups?.length){
+      document.getElementById("proximityMinSize").value=data.minSize;
+      document.getElementById("proximityMaxSize").value=data.maxSize;
+    }
+    renderProximityAdmin(data);
+    status.className=data.groups?.length?"status ok":"status warn";
+    status.textContent=!data.effectiveDate
+      ? "현재 적용 중인 자리표가 없습니다."
+      : data.needsGeneration
+        ? "자리표가 변경되었습니다. 현재 자리표로 조를 다시 생성해주세요."
+        : data.groups?.length
+          ? `${data.minSize}~${data.maxSize}명 기준으로 ${data.groups.length}개 조가 생성되어 있습니다.`
+          : "아직 생성된 조가 없습니다.";
+  }catch(error){status.className="status warn";status.textContent=error.message}
+}
+
+document.getElementById("reloadProximityGroupsButton").onclick=loadProximityAdmin;
+document.getElementById("generateProximityGroupsButton").onclick=async()=>{
+  const button=document.getElementById("generateProximityGroupsButton");
+  const status=document.getElementById("proximityAdminStatus");
+  button.disabled=true;status.className="status";status.textContent="가까운 자리끼리 조를 계산하는 중입니다.";
+  try{
+    const data=await adminRequest("generate_proximity_groups",{
+      minSize:Number(document.getElementById("proximityMinSize").value),
+      maxSize:Number(document.getElementById("proximityMaxSize").value)
+    });
+    renderProximityAdmin(data);
+    status.className="status ok";
+    status.textContent=`${data.effectiveDate} 자리표 기준으로 ${data.groups.length}개 조를 생성했습니다.`;
+  }catch(error){status.className="status warn";status.textContent=error.message}
+  finally{button.disabled=false}
+};
 
 
 async function loadMealSettings(){
