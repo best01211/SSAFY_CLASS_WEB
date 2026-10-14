@@ -546,14 +546,28 @@ document.getElementById("saveSeatButton").onclick=async()=>{
 document.getElementById("fetchMenuButton").onclick=async()=>{
   const status=document.getElementById("fetchMenuStatus");
   const date=document.getElementById("menuDate").value;
+  const button=document.getElementById("fetchMenuButton");
+  button.disabled=true;
   status.textContent="10층·20층 메뉴를 가져오는 중입니다.";
   try{
+    if(!date)throw new Error("메뉴 날짜를 선택해주세요.");
     const response=await fetch(`/api/fetch-welplan-menu?date=${date.replaceAll("-","")}`,{cache:"no-store"});
     const data=await response.json();
     if(!response.ok||!data.ok)throw new Error(data.message||`HTTP ${response.status}`);
-    status.className="status ok";
-    status.innerHTML=`메뉴 저장 성공<br><span style="white-space:pre-line">${escapeHtml(data.result.menuText)}</span>`;
+    const result=data.result;
+    if(result.menu10 != null)document.getElementById("menu10").value=result.menu10;
+    if(result.menu20 != null)document.getElementById("menu20").value=result.menu20;
+    const warnings=result.warnings || [];
+    status.className=warnings.length ? "status warn" : "status ok";
+    status.textContent=[
+      warnings.length ? "일부 메뉴를 저장했습니다." : "10층·20층 메뉴를 저장했습니다.",
+      `10층: ${result.menu10 != null ? "수집 완료" : "수집 실패"}`,
+      `20층: ${result.menu20 != null ? "수집 완료" : "수집 실패"}`,
+      ...warnings,
+    ].join("\n");
+    status.style.whiteSpace="pre-line";
   }catch(error){status.className="status warn";status.textContent=`메뉴 수집 실패: ${error.message}`}
+  finally{button.disabled=false}
 };
 
 document.getElementById("saveMenuButton").onclick=async()=>{

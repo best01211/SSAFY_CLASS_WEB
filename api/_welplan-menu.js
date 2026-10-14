@@ -1,5 +1,6 @@
 
 import { createClient } from "@supabase/supabase-js";
+import { requestMenuJson } from "./_menu-request.js";
 
 const WELPLAN_BASE = "https://welplan.pmh.codes";
 const RESTAURANT_ID = "REST000133";
@@ -99,7 +100,7 @@ async function requestTenFloorMenu(compactDate) {
   const date = databaseDate(compactDate);
   const sourceUrl = `${TEN_FLOOR_RAW_BASE}/${date}.json`;
 
-  const response = await fetch(sourceUrl, {
+  const payload = await requestMenuJson(sourceUrl, {
     headers: {
       Accept: "application/json",
       "User-Agent": "SSAFY-Class-Menu/4.0",
@@ -107,15 +108,6 @@ async function requestTenFloorMenu(compactDate) {
     cache: "no-store",
   });
 
-  if (response.status === 404) {
-    throw new Error(`${date} 10층 메뉴가 GitHub에 아직 등록되지 않았습니다.`);
-  }
-
-  if (!response.ok) {
-    throw new Error(`10층 GitHub 메뉴 요청 실패: HTTP ${response.status}`);
-  }
-
-  const payload = await response.json();
   validateTenFloorPayload(payload, date);
 
   const meals = normalizeTenFloorMeals(payload);
@@ -352,7 +344,7 @@ async function requestTwentyFloorMenu(compactDate) {
 
   for (const apiUrl of urls) {
     try {
-      const response = await fetch(apiUrl, {
+      const payload = await requestMenuJson(apiUrl, {
         headers: {
           Accept: "application/json",
           Cookie: cookie,
@@ -361,11 +353,6 @@ async function requestTwentyFloorMenu(compactDate) {
         cache: "no-store",
       });
 
-      if (!response.ok) {
-        throw new Error(`Welplan API HTTP ${response.status}`);
-      }
-
-      const payload = await response.json();
       const menus = extractTwentyFloorMenus(payload);
 
       if (menus.length) {

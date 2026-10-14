@@ -1,5 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/fetch-welplan-menu.js": { "maxDuration": 30 },
+    "api/scheduled-welplan-menu.js": { "maxDuration": 30 }
+  },
   "crons": [
     {
       "path": "/api/scheduled-welplan-menu",
