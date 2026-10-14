@@ -6,8 +6,8 @@ const WELPLAN_BASE = "https://welplan.pmh.codes";
 const RESTAURANT_ID = "REST000133";
 const RESTAURANT = {
   id: RESTAURANT_ID,
-  name: "20층 식당",
-  vendor: "shinsegae",
+  name: "멀티캠퍼스",
+  vendor: "welstory",
 };
 
 const TEN_FLOOR_RAW_BASE =
@@ -30,10 +30,6 @@ export function koreanCompactDate(date = new Date()) {
 
 function databaseDate(compactDate) {
   return `${compactDate.slice(0, 4)}-${compactDate.slice(4, 6)}-${compactDate.slice(6, 8)}`;
-}
-
-function restaurantCookie() {
-  return encodeURIComponent(JSON.stringify([RESTAURANT]));
 }
 
 function clean(value) {
@@ -127,30 +123,6 @@ async function requestTenFloorMenu(compactDate) {
    20층 Welplan API
 ────────────────────────────── */
 
-function findMenusArrays(root) {
-  const found = [];
-  const visited = new Set();
-
-  function walk(value) {
-    if (!value || typeof value !== "object" || visited.has(value)) return;
-    visited.add(value);
-
-    if (Array.isArray(value)) {
-      value.forEach(walk);
-      return;
-    }
-
-    if (Array.isArray(value.menus)) {
-      found.push(value.menus);
-    }
-
-    Object.values(value).forEach(walk);
-  }
-
-  walk(root);
-  return found;
-}
-
 function firstString(object, keys) {
   for (const key of keys) {
     const value = object?.[key];
@@ -200,31 +172,6 @@ function menuTitle(menu) {
     "mainMenuName",
     "displayName",
   ]);
-}
-
-function mealTimeText(menu) {
-  return clean(
-    menu?.mealTimeName ??
-    menu?.mealTime?.name ??
-    menu?.mealType ??
-    menu?.timeName ??
-    ""
-  );
-}
-
-function isLunchMenu(menu) {
-  const text = mealTimeText(menu).toLowerCase();
-
-  if (text.includes("점심") || text.includes("lunch")) return true;
-
-  const mealTimeId = String(
-    menu?.mealTimeId ??
-    menu?.mealTime?.id ??
-    menu?.timeId ??
-    ""
-  );
-
-  return mealTimeId === "2";
 }
 
 function findImageUrl(value, visited = new Set()) {
@@ -306,21 +253,24 @@ function uniqueMenuObjects(menus) {
   return [...map.values()];
 }
 
-function extractTwentyFloorMenus(payload) {
-  const allMenus = findMenusArrays(payload).flat();
-
-  const normalizedAll = allMenus
+export function extractTwentyFloorMenus(payload, compactDate) {
+  if (payload?.restaurant?.id !== RESTAURANT_ID ||
+      payload?.restaurant?.vendor !== RESTAURANT.vendor) {
+    throw new Error("Welplan API 응답의 식당 정보가 일치하지 않습니다.");
+  }
+  if (payload.date !== compactDate) {
+    throw new Error("Welplan API 응답의 메뉴 날짜가 일치하지 않습니다.");
+  }
+  if (!Array.isArray(payload.meals)) {
+    throw new Error("Welplan API 응답에 meals 배열이 없습니다.");
+  }
+  const lunchMenus = payload.meals
+    .filter(meal => meal?.type === "lunch" || String(meal?.id) === "2")
+    .flatMap(meal => Array.isArray(meal.menus) ? meal.menus : [])
+    .filter(menu => menu?.isTakeOut !== true)
     .map(normalizeTwentyFloorMenu)
     .filter(Boolean);
-
-  const lunchOnly = allMenus
-    .filter(isLunchMenu)
-    .map(normalizeTwentyFloorMenu)
-    .filter(Boolean);
-
-  return uniqueMenuObjects(
-    lunchOnly.length ? lunchOnly : normalizedAll
-  );
+  return uniqueMenuObjects(lunchMenus);
 }
 
 function formatTwentyFloorMenu(menus) {
@@ -332,47 +282,50 @@ function formatTwentyFloorMenu(menus) {
     .join("\n\n");
 }
 
-async function requestTwentyFloorMenu(compactDate) {
-  const cookie = `welplan_restaurants=${restaurantCookie()}`;
-
-  const urls = [
-    `${WELPLAN_BASE}/api/menu/live?kind=takein&date=${compactDate}&time=2`,
-    `${WELPLAN_BASE}/api/menu/live?kind=takein&date=${compactDate}&time=all`,
-  ];
-
-  let lastError = null;
-
-  for (const apiUrl of urls) {
-    try {
-      const payload = await requestMenuJson(apiUrl, {
-        headers: {
-          Accept: "application/json",
-          Cookie: cookie,
-          "User-Agent": "SSAFY-Class-Menu/4.0",
+export async function requestTwentyFloorMenu(compactDate) {
+  const apiUrl = WELPLAN_BASE + "/mcp";
+  const rpc = await requestMenuJson(apiUrl, {
+    method: "POST",
+    headers: {
+      Accept: "application/json, text/event-stream",
+      "Content-Type": "application/json",
+      "User-Agent": "SSAFY-Class-Menu/5.0",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "get_restaurant_menu",
+        arguments: {
+          vendor: RESTAURANT.vendor,
+          restaurantId: RESTAURANT_ID,
+          date: compactDate,
         },
-        cache: "no-store",
-      });
-
-      const menus = extractTwentyFloorMenus(payload);
-
-      if (menus.length) {
-        return {
-          menus,
-          menuText: formatTwentyFloorMenu(menus),
-          apiUrl,
-          sourceUrl:
-            `${WELPLAN_BASE}/takein/${compactDate}/all?restaurant=${RESTAURANT_ID}`,
-        };
-      }
-
-      lastError =
-        new Error("Welplan API 응답에서 20층 메뉴를 찾지 못했습니다.");
-    } catch (error) {
-      lastError = error;
-    }
+      },
+    }),
+    cache: "no-store",
+  });
+  if (rpc.error || rpc.result?.isError) {
+    const message = rpc.error?.message || rpc.result?.content
+      ?.filter(item => item.type === "text").map(item => item.text).join(" ");
+    throw new Error(message || "Welplan 메뉴 조회에 실패했습니다.");
   }
-
-  throw lastError ?? new Error("Welplan 메뉴 요청에 실패했습니다.");
+  let payload = rpc.result?.structuredContent;
+  if (!payload) {
+    const text = rpc.result?.content?.find(item => item.type === "text")?.text;
+    if (!text) throw new Error("Welplan API 응답에 메뉴 데이터가 없습니다.");
+    payload = JSON.parse(text);
+  }
+  const menus = extractTwentyFloorMenus(payload, compactDate);
+  if (!menus.length) throw new Error("Welplan에 해당 날짜의 20층 점심 메뉴가 없습니다.");
+  return {
+    menus,
+    menuText: formatTwentyFloorMenu(menus),
+    apiUrl,
+    sourceUrl: WELPLAN_BASE + "/restaurants/" + RESTAURANT.vendor + "/" +
+      RESTAURANT_ID + "/" + encodeURIComponent(RESTAURANT.name) + "/" + compactDate,
+  };
 }
 
 /* ──────────────────────────────
@@ -432,7 +385,7 @@ export async function saveMenu(compactDate) {
   if (twentyResult.status === "fulfilled") {
     row.menu_20 = twentyResult.value.menuText;
     row.menu_20_items = twentyResult.value.menus;
-    row.menu_20_source = "welplan-live-api";
+    row.menu_20_source = "welplan-mcp-api";
     row.menu_20_source_url = twentyResult.value.sourceUrl;
     row.menu_20_fetched_at = new Date().toISOString();
     row.menu_20_fetch_error = null;

@@ -273,7 +273,7 @@ async function loadProximityGroups(){
 function renderMenus(menu){
   const sourceUrl=
     menu?.menu_20_source_url ||
-    `https://welplan.pmh.codes/takein/${compactDate()}/all?restaurant=REST000133`;
+    `https://welplan.pmh.codes/restaurants/welstory/REST000133/${encodeURIComponent("멀티캠퍼스")}/${compactDate()}`;
 
   const items=Array.isArray(menu?.menu_20_items)
     ? menu.menu_20_items

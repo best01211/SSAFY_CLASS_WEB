@@ -1,7 +1,68 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { requestMenuJson } from "../api/_menu-request.js";
-import { saveMenu } from "../api/_welplan-menu.js";
+import { saveMenu, requestTwentyFloorMenu, extractTwentyFloorMenus } from "../api/_welplan-menu.js";
+
+function welplanPayload() {
+  return {
+    restaurant: { id: "REST000133", name: "멀티캠퍼스", vendor: "welstory" },
+    date: "20261014",
+    meals: [
+      { id: "1", type: "breakfast", menus: [{ name: "아침 메뉴" }] },
+      { id: "2", type: "lunch", menus: [
+        { name: "돼지고기사태김치찜", components: [
+          { name: "돼지고기사태김치찜", isMain: true },
+          { name: "차조밥" }, { name: "수제비국" },
+        ], imageUrl: "https://images.example/lunch.png", isTakeOut: false },
+        { name: "키친보스봉골레파스타", components: [{ name: "마늘토스트" }] },
+        { name: "포장 메뉴", isTakeOut: true },
+      ] },
+      { id: "3", type: "dinner", menus: [{ name: "저녁 메뉴" }] },
+    ],
+  };
+}
+
+test("documented MCP request uses Welstory and handles structured and text results", async (t) => {
+  for (const format of ["structuredContent", "content"]) {
+    await t.test(format, async (t) => {
+      t.mock.method(globalThis, "fetch", async (url, options) => {
+        assert.equal(url, "https://welplan.pmh.codes/mcp");
+        assert.equal(options.method, "POST");
+        assert.equal(options.headers.Accept, "application/json, text/event-stream");
+        assert.equal(options.headers.Cookie, undefined);
+        const body = JSON.parse(options.body);
+        assert.equal(body.method, "tools/call");
+        assert.equal(body.params.name, "get_restaurant_menu");
+        assert.deepEqual(body.params.arguments, { vendor: "welstory", restaurantId: "REST000133", date: "20261014" });
+        const result = format === "structuredContent"
+          ? { structuredContent: welplanPayload() }
+          : { content: [{ type: "text", text: JSON.stringify(welplanPayload()) }] };
+        return Response.json({ jsonrpc: "2.0", id: 1, result });
+      });
+      const result = await requestTwentyFloorMenu("20261014");
+      assert.deepEqual(result.menus.map(menu => menu.title), ["돼지고기사태김치찜", "키친보스봉골레파스타"]);
+      assert.deepEqual(result.menus[0].sides, ["차조밥", "수제비국"]);
+      assert.equal(result.menus[0].imageUrl, "https://images.example/lunch.png");
+      assert.match(result.sourceUrl, /restaurants\/welstory\/REST000133\//);
+    });
+  }
+});
+
+test("missing lunch never substitutes breakfast; wrong restaurant or date is rejected", () => {
+  const payload = welplanPayload();
+  payload.meals = payload.meals.filter(meal => meal.type !== "lunch");
+  assert.deepEqual(extractTwentyFloorMenus(payload, "20261014"), []);
+  assert.throws(() => extractTwentyFloorMenus(payload, "20261015"), /날짜/);
+  payload.restaurant.vendor = "shinsegae";
+  assert.throws(() => extractTwentyFloorMenus(payload, "20261014"), /식당 정보/);
+});
+
+test("MCP errors surface instead of being mistaken for menus", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => Response.json({
+    jsonrpc: "2.0", id: 1, result: { isError: true, content: [{ type: "text", text: "upstream unavailable" }] },
+  }));
+  await assert.rejects(requestTwentyFloorMenu("20261014"), /upstream unavailable/);
+});
 
 test("menu timeout covers both an unresponsive server and a stalled JSON body", async (t) => {
   for (const stage of ["headers", "body"]) {

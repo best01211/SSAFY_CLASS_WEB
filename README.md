@@ -1,5 +1,7 @@
 # 적용 순서
 
+20층 식단은 [Welplan 공식 API 문서](https://welplan.pmh.codes/docs/api)의 `/mcp` → `get_restaurant_menu`로 조회합니다. 공식 식당 검색에서 확인한 멀티캠퍼스 `welstory / REST000133`을 사용하며, 요청한 날짜의 점심 중 식당 내 식사 메뉴만 저장합니다. 아침·저녁 메뉴를 점심 대신 표시하지 않습니다. 각 원본 요청에는 5초 제한이 있어 한 층이 실패해도 다른 층의 수집 결과는 저장됩니다. 코드 변경은 Vercel 재배포 후 적용됩니다. 재배포한 뒤 관리자 화면에서 날짜를 선택하고 메뉴 가져오기를 실행하면 해당 날짜 식단을 바로 등록할 수 있습니다.
+
 **최신 관리자·밥친구·자리 기능은 [2026-10-06 변경 안내](docs/UPDATE_2026-10-06.md)를 먼저 확인하세요.** Supabase에서 `class_management_update.sql`, `class_management_cron.sql` 순서로 실행한 뒤 재배포합니다.
 
 자리 기준 조 만들기 기능을 추가로 적용하려면 Supabase SQL Editor에서 `proximity_groups_update.sql`을 실행합니다. 관리자가 최소·최대 인원을 정해 조를 생성하면 현재 적용 중인 자리표를 기준으로 가까운 학생끼리 편성됩니다.
