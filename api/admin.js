@@ -356,6 +356,11 @@ export default async function handler(request, response) {
           menu_date: body.date,
           menu_10: body.menu10 ?? "",
           menu_20: body.menu20 ?? "",
+            menu_20_items: [],
+            menu_20_source: "manual",
+            menu_20_source_url: null,
+            menu_20_fetched_at: null,
+            menu_20_fetch_error: null,
           updated_at: new Date().toISOString(),
         }, { onConflict: "menu_date" });
 
